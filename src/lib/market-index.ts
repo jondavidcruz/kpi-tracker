@@ -14,6 +14,23 @@ export type MarketTilt = "strong-buyer" | "buyer" | "balanced" | "seller" | "str
 export type MarketIndex = { index: number; tilt: MarketTilt; label: string; repHint: string; parts: number };
 const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
+// Shared index→label/tilt/hint so the county index AND the ZIP/city index read identically.
+export function tiltForIndex(index: number): MarketTilt {
+  return index >= 70 ? "strong-seller" : index >= 57 ? "seller" : index >= 43 ? "balanced" : index >= 30 ? "buyer" : "strong-buyer";
+}
+export function labelForIndex(index: number): string {
+  const t = tiltForIndex(index);
+  return t === "strong-seller" ? "Strong seller market" : t === "seller" ? "Seller's market" : t === "balanced" ? "Balanced market" : t === "buyer" ? "Buyer's market" : "Strong buyer market";
+}
+export function repHintForIndex(index: number): string {
+  // Framed for a LAND WHOLESALER: a buyer's market = motivated sellers = a great area to pull.
+  return index < 43
+    ? "High supply, soft demand — motivated sellers. Strong area to pull & make offers."
+    : index > 57
+      ? "Tight market, sellers have leverage — expect harder negotiations, lead sharper on value."
+      : "Even market — deals are there, win on speed and certainty of close.";
+}
+
 /** Compute one area's buyer↔seller index. `invPct` = this area's for-sale-inventory percentile
  *  (0..1) across the scanned set — the caller ranks it once and passes it in (optional). */
 export function buyerSellerIndex(c: Pick<CountyScan, "daysToPending" | "yoyPct" | "trends">, invPct?: number | null): MarketIndex {
@@ -28,13 +45,5 @@ export function buyerSellerIndex(c: Pick<CountyScan, "daysToPending" | "yoyPct" 
   if (invPct != null) parts.push({ v: clampN(100 - invPct * 100, 0, 100), w: 0.15 });
   const wsum = parts.reduce((s, p) => s + p.w, 0);
   const index = wsum ? Math.round(parts.reduce((s, p) => s + p.v * p.w, 0) / wsum) : 50;
-  const tilt: MarketTilt = index >= 70 ? "strong-seller" : index >= 57 ? "seller" : index >= 43 ? "balanced" : index >= 30 ? "buyer" : "strong-buyer";
-  const label = tilt === "strong-seller" ? "Strong seller market" : tilt === "seller" ? "Seller's market" : tilt === "balanced" ? "Balanced market" : tilt === "buyer" ? "Buyer's market" : "Strong buyer market";
-  // Framed for a LAND WHOLESALER: a buyer's market = motivated sellers = a great area to pull.
-  const repHint = index < 43
-    ? "High supply, soft demand — motivated sellers. Strong area to pull & make offers."
-    : index > 57
-      ? "Tight market, sellers have leverage — expect harder negotiations, lead sharper on value."
-      : "Even market — deals are there, win on speed and certainty of close.";
-  return { index, tilt, label, repHint, parts: parts.length };
+  return { index, tilt: tiltForIndex(index), label: labelForIndex(index), repHint: repHintForIndex(index), parts: parts.length };
 }

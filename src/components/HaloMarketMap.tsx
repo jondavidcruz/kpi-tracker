@@ -23,6 +23,7 @@ type Pt = { lat: number; lng: number };
 export type LandTrends = { landSold: { d30: number; d90: number; d180: number }; newConSold: { d30: number; d90: number; d180: number }; landPending: number; newConPending: number; yoyLandPct: number | null; asOf: string };
 export type ScanPt = { fips: string; name: string; state: string; score: number; tier: "target" | "watch" | "low"; price: number | null; yoy: number | null; dtp: number | null; landShare: number | null; trends?: LandTrends | null; buyers?: number; ring?: number; residual?: number | null; testMarket?: boolean; lat: number; lng: number };
 export type ClosedDeal = { lat: number; lng: number; address: string; soldPrice: number | null; fee: number | null; buyer: string; soldDate: string; dealType: string };
+export type ZipPt = { zip: string; city: string; index: number; label: string; active: number; pending: number; sold90: number; monthsSupply: number | null; lat: number; lng: number };
 
 const LEAFLET_JS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js";
 const LEAFLET_CSS = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css";
@@ -124,7 +125,7 @@ function loadScript(src: string, css?: string): Promise<void> {
   });
 }
 
-export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemaining = 0, canEdit = false, territories = [], terrStats = {}, scanPoints = [], leadPins = [], leadZipsRemaining = 0, buyerCoverage = [], pullStats = {}, campaignHealth = {}, campaignInterested = {}, campaignOffers = {}, campaignNotes = {}, campaignLinks = {}, campaignOptions = [], campaignHealthSyncedAt = "", closedDeals = [] }: { markets: MarketView[]; buyerPoints?: Pt[]; geocodeRemaining?: number; canEdit?: boolean; territories?: Territory[]; terrStats?: Record<string, { leads: number; deals: number }>; scanPoints?: ScanPt[]; leadPins?: LeadPin[]; leadZipsRemaining?: number; buyerCoverage?: BuyerCoverage[]; pullStats?: Record<string, { leads: number; offersMade: number; contractSent: number; closed: number; value: number }>; campaignHealth?: Record<string, { sent: number; replied: number; interested: number; priced: number; notInterested: number; optedOut: number }>; campaignInterested?: Record<string, Array<{ name: string; phone: string; address: string; status: string; at: string }>>; campaignOffers?: Record<string, Array<{ name: string; address: string; value: number; stage: string; at: string }>>; campaignNotes?: Record<string, Array<{ text: string; by: string; at: string }>>; campaignLinks?: Record<string, string>; campaignOptions?: string[]; campaignHealthSyncedAt?: string; closedDeals?: ClosedDeal[] }) {
+export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemaining = 0, canEdit = false, territories = [], terrStats = {}, scanPoints = [], leadPins = [], leadZipsRemaining = 0, buyerCoverage = [], pullStats = {}, campaignHealth = {}, campaignInterested = {}, campaignOffers = {}, campaignNotes = {}, campaignLinks = {}, campaignOptions = [], campaignHealthSyncedAt = "", closedDeals = [], zipPoints = [] }: { markets: MarketView[]; buyerPoints?: Pt[]; geocodeRemaining?: number; canEdit?: boolean; territories?: Territory[]; terrStats?: Record<string, { leads: number; deals: number }>; scanPoints?: ScanPt[]; leadPins?: LeadPin[]; leadZipsRemaining?: number; buyerCoverage?: BuyerCoverage[]; pullStats?: Record<string, { leads: number; offersMade: number; contractSent: number; closed: number; value: number }>; campaignHealth?: Record<string, { sent: number; replied: number; interested: number; priced: number; notInterested: number; optedOut: number }>; campaignInterested?: Record<string, Array<{ name: string; phone: string; address: string; status: string; at: string }>>; campaignOffers?: Record<string, Array<{ name: string; address: string; value: number; stage: string; at: string }>>; campaignNotes?: Record<string, Array<{ text: string; by: string; at: string }>>; campaignLinks?: Record<string, string>; campaignOptions?: string[]; campaignHealthSyncedAt?: string; closedDeals?: ClosedDeal[]; zipPoints?: ZipPt[] }) {
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<unknown>(null);
   const dataRef = useRef<unknown>(null);   // markets + buyers + saved territories
@@ -760,6 +761,19 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       mk.bindTooltip(show.market ? `${s.name} · 🎚 ${miV.index}` : `${s.name} · ${s.score}`, { direction: "top", className: "fo-map-label", offset: [0, -rad] });
     }
 
+    // 📍 Pulled-ZIP Buyer↔Seller markers (Phase 2b) — shown only in the 🎚 Buyer/Seller view so a
+    // rep sees, down to the ZIP they pulled, where motivated sellers are (green) vs tight markets (red).
+    if (show.market) for (const z of zipPoints) {
+      const col = miColorHex(z.index);
+      const zm = L.circleMarker([z.lat, z.lng], { radius: 8, color: "#0f172a", weight: 1.5, fillColor: col, fillOpacity: 0.95 }).addTo(group);
+      zm.bindPopup(
+        `<div style="font:12px system-ui;min-width:190px"><div style="font-weight:800;font-size:13px">📍 ${z.zip}${z.city ? ` · ${z.city}` : ""}</div>` +
+        `<div style="margin:3px 0;font-weight:700;color:${col}">🎚 Market ${z.index}/100 · ${z.label}</div>` +
+        `<div style="position:relative;height:6px;border-radius:4px;margin:3px 0;background:linear-gradient(90deg,#34d399,#a7f3d0,#e2e8f0,#fecdd3,#fb7185)"><div style="position:absolute;top:-1px;left:${z.index}%;width:2px;height:8px;background:#0f172a;transform:translateX(-50%)"></div></div>` +
+        `<div style="color:#334155">🏷 ${z.active.toLocaleString()} active · ${z.pending.toLocaleString()} pending · ${z.sold90.toLocaleString()} sold/90d${z.monthsSupply != null ? ` · ${z.monthsSupply} mo supply` : ""}</div></div>`);
+      zm.bindTooltip(`${z.zip} · 🎚 ${z.index}`, { direction: "top", className: "fo-map-label", offset: [0, -8] });
+    }
+
     const placed = show.markets ? markets.filter((v) => COORDS[v.m.name]) : [];
     const maxDeals = Math.max(1, ...placed.map((v) => v.deals));
     for (const v of placed) {
@@ -785,7 +799,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       try { map.fitBounds(group.getBounds().pad(0.15)); didFitRef.current = true; } catch { /* no markers */ }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, markets, buyerPoints, territories, show, scanPoints, leadPins, buyerCoverage, closedDeals]);
+  }, [ready, markets, buyerPoints, territories, show, scanPoints, leadPins, buyerCoverage, closedDeals, zipPoints]);
 
   // Re-measure the map once it's ready (container has its real size by then).
   useEffect(() => {

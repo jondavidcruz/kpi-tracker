@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { logPullAction, setMarketTrendAction, setMarketStatusAction } from "@/app/markets/actions";
-import HaloMarketMap, { type ScanPt, type ClosedDeal } from "@/components/HaloMarketMap";
+import HaloMarketMap, { type ScanPt, type ClosedDeal, type ZipPt } from "@/components/HaloMarketMap";
 import type { LeadPin } from "@/lib/lead-pins";
 import type { BuyerCoverage } from "@/lib/buyer-coverage-map";
 import MarketAnalysisPanel from "@/components/MarketAnalysisPanel";
@@ -40,7 +40,7 @@ function ScoreBar({ label, n }: { label: string; n: number }) {
   );
 }
 
-export default function MarketsBoard({ markets, canEdit, buyerPoints = [], geocodeRemaining = 0, territories = [], terrStats = {}, scanPoints = [], leadPins = [], leadZipsRemaining = 0, buyerCoverage = [], pullStats = {}, campaignHealth = {}, campaignInterested = {}, campaignOffers = {}, campaignNotes = {}, campaignLinks = {}, campaignOptions = [], campaignHealthSyncedAt = "", closedDeals = [] }: { markets: MarketView[]; canEdit: boolean; buyerPoints?: { lat: number; lng: number }[]; geocodeRemaining?: number; territories?: import("@/lib/map-territories").Territory[]; terrStats?: Record<string, { leads: number; deals: number }>; scanPoints?: ScanPt[]; leadPins?: LeadPin[]; leadZipsRemaining?: number; buyerCoverage?: BuyerCoverage[]; pullStats?: Record<string, { leads: number; offersMade: number; contractSent: number; closed: number; value: number }>; campaignHealth?: Record<string, { sent: number; replied: number; interested: number; priced: number; notInterested: number; optedOut: number }>; campaignInterested?: Record<string, Array<{ name: string; phone: string; address: string; status: string; at: string }>>; campaignOffers?: Record<string, Array<{ name: string; address: string; value: number; stage: string; at: string }>>; campaignNotes?: Record<string, Array<{ text: string; by: string; at: string }>>; campaignLinks?: Record<string, string>; campaignOptions?: string[]; campaignHealthSyncedAt?: string; closedDeals?: ClosedDeal[] }) {
+export default function MarketsBoard({ markets, canEdit, buyerPoints = [], geocodeRemaining = 0, territories = [], terrStats = {}, scanPoints = [], leadPins = [], leadZipsRemaining = 0, buyerCoverage = [], pullStats = {}, campaignHealth = {}, campaignInterested = {}, campaignOffers = {}, campaignNotes = {}, campaignLinks = {}, campaignOptions = [], campaignHealthSyncedAt = "", closedDeals = [], zipPoints = [] }: { markets: MarketView[]; canEdit: boolean; buyerPoints?: { lat: number; lng: number }[]; geocodeRemaining?: number; territories?: import("@/lib/map-territories").Territory[]; terrStats?: Record<string, { leads: number; deals: number }>; scanPoints?: ScanPt[]; leadPins?: LeadPin[]; leadZipsRemaining?: number; buyerCoverage?: BuyerCoverage[]; pullStats?: Record<string, { leads: number; offersMade: number; contractSent: number; closed: number; value: number }>; campaignHealth?: Record<string, { sent: number; replied: number; interested: number; priced: number; notInterested: number; optedOut: number }>; campaignInterested?: Record<string, Array<{ name: string; phone: string; address: string; status: string; at: string }>>; campaignOffers?: Record<string, Array<{ name: string; address: string; value: number; stage: string; at: string }>>; campaignNotes?: Record<string, Array<{ text: string; by: string; at: string }>>; campaignLinks?: Record<string, string>; campaignOptions?: string[]; campaignHealthSyncedAt?: string; closedDeals?: ClosedDeal[]; zipPoints?: ZipPt[] }) {
   const [focus, setFocus] = useState<"" | LandFocus>("");
   const [cov, setCov] = useState<"" | Coverage["status"]>("");
   const [openPull, setOpenPull] = useState<string | null>(null);
@@ -75,7 +75,7 @@ export default function MarketsBoard({ markets, canEdit, buyerPoints = [], geoco
       </div>
 
       {view === "analysis" && <MarketAnalysisPanel markets={rows} />}
-      {view === "map" && <HaloMarketMap markets={rows} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} canEdit={canEdit} territories={territories} terrStats={terrStats} scanPoints={scanPoints} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining} buyerCoverage={buyerCoverage} pullStats={pullStats} campaignHealth={campaignHealth} campaignInterested={campaignInterested} campaignOffers={campaignOffers} campaignNotes={campaignNotes} campaignLinks={campaignLinks} campaignOptions={campaignOptions} campaignHealthSyncedAt={campaignHealthSyncedAt} closedDeals={closedDeals} />}
+      {view === "map" && <HaloMarketMap markets={rows} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} canEdit={canEdit} territories={territories} terrStats={terrStats} scanPoints={scanPoints} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining} buyerCoverage={buyerCoverage} pullStats={pullStats} campaignHealth={campaignHealth} campaignInterested={campaignInterested} campaignOffers={campaignOffers} campaignNotes={campaignNotes} campaignLinks={campaignLinks} campaignOptions={campaignOptions} campaignHealthSyncedAt={campaignHealthSyncedAt} closedDeals={closedDeals} zipPoints={zipPoints} />}
 
       <div className={`grid grid-cols-1 gap-3 lg:grid-cols-2 ${view !== "cards" ? "hidden" : ""}`}>
         {rows.map(({ m, coverage, leads, deals, momentum }) => {

@@ -39,8 +39,25 @@ function MarketGauge({ mi, big = false }: { mi: MarketIndex; big?: boolean }) {
 const money = (n: number | null) => (n == null ? "—" : `$${Math.round(n).toLocaleString()}`);
 const pct = (n: number | null) => (n == null ? "—" : `${n >= 0 ? "+" : ""}${n}%`);
 
-export default function MarketFinder({ initial, canRefresh }: { initial: ScanStore | null; canRefresh: boolean }) {
+type ZipMkt = { zip: string; city: string; state: string; active: number; pending: number; sold90: number; monthsSupply: number | null; index: number; label: string };
+type CityMkt = { city: string; state: string; zips: number; active: number; pending: number; sold90: number; monthsSupply: number | null; index: number; label: string };
+type ZipStore = { asOf: string; configured: boolean; zips: ZipMkt[]; cities: CityMkt[] };
+
+export default function MarketFinder({ initial, canRefresh, zipMarket = null }: { initial: ScanStore | null; canRefresh: boolean; zipMarket?: ZipStore | null }) {
   const router = useRouter();
+  const [gran, setGran] = useState<"county" | "city" | "zip">("county");
+  const [zipBusy, setZipBusy] = useState(false);
+  const [zipMsg, setZipMsg] = useState("");
+  async function refreshZips() {
+    setZipBusy(true); setZipMsg("Pulling per-ZIP land market data… (free DealMachine counts)");
+    try {
+      const r = await fetch("/api/markets/zip-market?refresh=1", { cache: "no-store" });
+      const j = await r.json();
+      if (!r.ok || j.ok === false) { setZipMsg(j.error || "refresh failed"); return; }
+      setZipMsg(`✅ Updated ${j.count ?? 0} ZIPs · ${j.cityCount ?? 0} cities`);
+      router.refresh();
+    } catch { setZipMsg("network error"); } finally { setZipBusy(false); }
+  }
   const [state] = useState<"ALL" | "FL">("ALL"); // FL-only now (SC removed) — kept so the filter below is a no-op pass-through
   const [minPrice, setMinPrice] = useState(0);
   const [maxDtp, setMaxDtp] = useState(0); // 0 = no cap
@@ -142,7 +159,39 @@ export default function MarketFinder({ initial, canRefresh }: { initial: ScanSto
         <span className="ml-auto font-semibold text-slate-500">{rows.length} markets</span>
       </div>
 
-      {all.length === 0 ? (
+      {/* 🎚 Granularity — County (home + land opportunity) · City / ZIP (pulled-ZIP land buyer↔seller index) */}
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+        <span className="font-bold text-slate-500">Break down by:</span>
+        {(["county", "city", "zip"] as const).map((g) => (
+          <button key={g} onClick={() => setGran(g)} className={`rounded-lg px-2.5 py-1 font-bold ${gran === g ? "bg-brand-navy text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{g === "county" ? "🗺 County" : g === "city" ? "🏙 City" : "📍 ZIP"}</button>
+        ))}
+        {gran !== "county" && canRefresh && <button onClick={refreshZips} disabled={zipBusy} className="rounded-lg bg-indigo-600 px-2.5 py-1 font-bold text-white hover:bg-indigo-700 disabled:opacity-50">{zipBusy ? "Pulling…" : "🔄 Refresh ZIP market"}</button>}
+        {gran !== "county" && zipMarket?.asOf && <span className="text-[11px] text-slate-400">ZIP data {new Date(zipMarket.asOf).toLocaleDateString()}</span>}
+        {zipMsg && <span className="text-[11px] font-semibold text-indigo-600">{zipMsg}</span>}
+      </div>
+
+      {gran !== "county" && (() => {
+        const items: (ZipMkt | CityMkt)[] = gran === "zip" ? (zipMarket?.zips ?? []) : (zipMarket?.cities ?? []);
+        if (!items.length) return <div className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">No ZIP market data yet. {canRefresh ? "Upload a pull list on the map, then click “🔄 Refresh ZIP market” (free DealMachine counts, ~a few seconds)." : "Ask Jon to refresh the ZIP market."}</div>;
+        return (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {items.map((it) => {
+              const isZip = gran === "zip";
+              const name = isZip ? `📍 ${(it as ZipMkt).zip}${(it as ZipMkt).city ? ` · ${(it as ZipMkt).city}` : ""}` : `🏙 ${(it as CityMkt).city}, ${(it as CityMkt).state}`;
+              const mi2: MarketIndex = { index: it.index, tilt: "balanced", label: it.label, repHint: "", parts: 1 };
+              return (
+                <div key={isZip ? (it as ZipMkt).zip : `${(it as CityMkt).city}-${(it as CityMkt).state}`} className={`rounded-xl p-2.5 ring-1 ${miChip(it.index)}`}>
+                  <div className="mb-1 flex items-center justify-between gap-2"><span className="truncate text-xs font-bold text-slate-800">{name}</span><span className="shrink-0 text-[10px] font-bold text-slate-500">{it.label}{!isZip ? ` · ${(it as CityMkt).zips} ZIPs` : ""}</span></div>
+                  <MarketGauge mi={mi2} big />
+                  <div className="mt-1 text-[10px] text-slate-500">🏷 {it.active.toLocaleString()} active · {it.pending.toLocaleString()} pending · {it.sold90.toLocaleString()} sold/90d{it.monthsSupply != null ? ` · ${it.monthsSupply} mo supply` : ""}</div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+
+      {gran === "county" && (all.length === 0 ? (
         <div className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">
           No scan yet. {canRefresh ? "Click “🔄 Refresh prices” to build it (free, ~5s)." : "Ask Jon to run the first scan."}
         </div>
@@ -222,7 +271,7 @@ export default function MarketFinder({ initial, canRefresh }: { initial: ScanSto
             </tbody>
           </table>
         </div>
-      )}
+      ))}
       <p className="mt-2 text-[10px] text-slate-400">
         Opportunity = home-price tier + YoY trend + days-to-pending liquidity{landLive ? " + share of land assessing ≥$100k" : ""}. <b>Market</b> = buyer↔seller index (0 = strong buyer&apos;s market / motivated sellers · 100 = strong seller&apos;s market), from days-to-pending + price trend + land-sales trend + for-sale supply. Click a row for the Market Insights card. Land value is the assessor&apos;s land value (reliable), not the land AVM.
       </p>

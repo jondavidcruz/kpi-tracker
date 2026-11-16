@@ -207,6 +207,9 @@ export default async function MarketsPage() {
   // 🏖 Focus FLORIDA for land right now (Jon 2026-11-11) — drop SC from the Finder (SC is an
   // attorney state, harder to wholesale). Filters a DB-stored scan too, not just the seed.
   const scanStore = { ...scanStoreRaw, counties: (scanStoreRaw.counties ?? []).filter((c) => c.state !== "SC") };
+  // 📍 Per-ZIP / per-city Buyer↔Seller land index for the ZIPs we've pulled (cached; refreshed from /markets).
+  const zipMarket = await (await import("@/lib/zip-market")).readZipMarket().catch(() => null);
+  const zipPoints = (zipMarket?.zips ?? []).filter((z) => z.lat != null && z.lng != null).map((z) => ({ zip: z.zip, city: z.city, index: z.index, label: z.label, active: z.active, pending: z.pending, sold90: z.sold90, monthsSupply: z.monthsSupply, lat: z.lat as number, lng: z.lng as number }));
 
   // Market Finder points for the map — join each scanned county to its centroid.
   const scanPoints = (scanStore.counties ?? []).flatMap((c) => {
@@ -356,9 +359,9 @@ export default async function MarketsPage() {
       {leader && <PullPriorityList rows={pullPriority} />}
       <MarketsTabs
         showResearch={leader}
-        map={<MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPointsRanked} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining + closedAddrsRemaining} buyerCoverage={buyerCoverage} pullStats={pullStats} campaignHealth={campaignHealth} campaignInterested={campaignInterested} campaignOffers={campaignOffers} campaignNotes={campaignNotes} campaignLinks={campaignLinks} campaignOptions={campaignOptions} campaignHealthSyncedAt={campaignHealthSyncedAt} closedDeals={closedDeals} />}
+        map={<MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPointsRanked} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining + closedAddrsRemaining} buyerCoverage={buyerCoverage} pullStats={pullStats} campaignHealth={campaignHealth} campaignInterested={campaignInterested} campaignOffers={campaignOffers} campaignNotes={campaignNotes} campaignLinks={campaignLinks} campaignOptions={campaignOptions} campaignHealthSyncedAt={campaignHealthSyncedAt} closedDeals={closedDeals} zipPoints={zipPoints} />}
         research={leader ? <ResearchWorkbench quickMarkets={quickMarkets} scan={scanAtAGlance} demand={demand} coverage={coverageByFips} marketStats={marketStatsByFips} /> : null}
-        finder={<MarketFinder initial={scanStore} canRefresh={leader} />}
+        finder={<MarketFinder initial={scanStore} canRefresh={leader} zipMarket={zipMarket} />}
         niches={<NichePlaybook matches={nicheMatches} />}
         laws={<StateLawPanel />}
       />
