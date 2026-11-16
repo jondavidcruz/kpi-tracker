@@ -6,6 +6,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ScanStore, CountyScan } from "@/lib/market-scan";
+import { buyerSellerIndex, type MarketIndex } from "@/lib/market-index";
 import { landSoldFor } from "@/lib/land-sold";
 
 const TIER: Record<CountyScan["tier"], { label: string; dot: string; row: string }> = {
@@ -13,7 +14,28 @@ const TIER: Record<CountyScan["tier"], { label: string; dot: string; row: string
   watch: { label: "👀 Watch", dot: "bg-amber-500", row: "" },
   low: { label: "🔻 Low", dot: "bg-slate-400", row: "opacity-70" },
 };
-type SortKey = "score" | "medianSalePrice" | "yoyPct" | "daysToPending" | "landHigh" | "landSold" | "inventory";
+type SortKey = "score" | "medianSalePrice" | "yoyPct" | "daysToPending" | "landHigh" | "landSold" | "inventory" | "market";
+
+// 🎚 The gradient reads left→right as BUYER's market → SELLER's market (like Zillow's bar).
+const miColor = (i: number) => (i < 43 ? "text-emerald-600" : i > 57 ? "text-rose-600" : "text-slate-700");
+const miChip = (i: number) => (i < 43 ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : i > 57 ? "bg-rose-50 text-rose-700 ring-rose-200" : "bg-slate-100 text-slate-600 ring-slate-200");
+
+/** Zillow-style buyer↔seller gauge: a gradient bar with a marker at the index, big number + label. */
+function MarketGauge({ mi, big = false }: { mi: MarketIndex; big?: boolean }) {
+  return (
+    <div className={big ? "w-full max-w-xs" : "w-28"}>
+      <div className="flex items-end gap-1">
+        <span className={`font-extrabold leading-none ${miColor(mi.index)} ${big ? "text-3xl" : "text-base"}`}>{mi.index}</span>
+        <span className={`text-slate-400 ${big ? "text-sm" : "text-[10px]"}`}>/100</span>
+      </div>
+      {big && <div className={`mb-1 text-xs font-bold ${miColor(mi.index)}`}>{mi.label}</div>}
+      <div className="relative mt-1 h-2 w-full rounded-full" style={{ background: "linear-gradient(90deg,#34d399 0%,#a7f3d0 28%,#e2e8f0 50%,#fecdd3 72%,#fb7185 100%)" }}>
+        <div className="absolute top-1/2 h-3.5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-slate-900 ring-1 ring-white" style={{ left: `${mi.index}%` }} />
+      </div>
+      {big && <div className="mt-0.5 flex justify-between text-[9px] font-semibold uppercase tracking-wide text-slate-400"><span>Buyer&apos;s</span><span>Seller&apos;s</span></div>}
+    </div>
+  );
+}
 const money = (n: number | null) => (n == null ? "—" : `$${Math.round(n).toLocaleString()}`);
 const pct = (n: number | null) => (n == null ? "—" : `${n >= 0 ? "+" : ""}${n}%`);
 
@@ -31,6 +53,15 @@ export default function MarketFinder({ initial, canRefresh }: { initial: ScanSto
   const [msg, setMsg] = useState("");
 
   const all = initial?.counties ?? [];
+  // 📊 For-sale-inventory percentile across the scanned set → feeds the supply weight of the index.
+  const invPct = useMemo(() => {
+    const withInv = all.filter((c) => c.inventory != null).map((c) => ({ fips: c.fips, inv: c.inventory as number })).sort((a, b) => a.inv - b.inv);
+    const n = withInv.length;
+    const m = new Map<string, number>();
+    withInv.forEach((x, i) => m.set(x.fips, n <= 1 ? 0.5 : i / (n - 1)));
+    return m;
+  }, [all]);
+  const mi = (c: CountyScan): MarketIndex => buyerSellerIndex(c, invPct.get(c.fips) ?? null);
   const rows = useMemo(() => {
     let r = all.filter((c) => {
       if (state !== "ALL" && c.state !== state) return false;
@@ -49,12 +80,14 @@ export default function MarketFinder({ initial, canRefresh }: { initial: ScanSto
         case "landHigh": return c.land?.highShare ?? -1;
         case "landSold": return landSoldFor(c.fips)?.share ?? -1;
         case "inventory": return c.inventory ?? -1;
+        case "market": return mi(c).index;
         default: return c.score;
       }
     };
     r = [...r].sort((a, b) => (sort === "daysToPending" ? key(a) - key(b) : key(b) - key(a)));
     return r;
-  }, [all, state, minPrice, maxDtp, hideCheap, tierFilter, q, sort]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [all, state, minPrice, maxDtp, hideCheap, tierFilter, q, sort, invPct]);
 
   async function refresh(withLand: boolean) {
     setBusy(true); setMsg(withLand ? "Scanning public data + land values… (up to ~45s)" : "Refreshing market data…");
@@ -120,6 +153,7 @@ export default function MarketFinder({ initial, canRefresh }: { initial: ScanSto
               <tr className="border-b border-slate-200">
                 <th className="px-2 py-1.5 text-left text-[10px] font-bold uppercase tracking-wide text-slate-400">Market</th>
                 <th className={th} onClick={() => setSort("score")}>Opportunity{sortArrow("score")}</th>
+                <th className={th} onClick={() => setSort("market")} title="Buyer↔Seller Market Index (0 = strong buyer's market / motivated sellers · 100 = strong seller's market)">Market{sortArrow("market")}</th>
                 <th className={th} onClick={() => setSort("medianSalePrice")}>Home median{sortArrow("medianSalePrice")}</th>
                 <th className={th} onClick={() => setSort("yoyPct")}>YoY{sortArrow("yoyPct")}</th>
                 <th className={th} onClick={() => setSort("daysToPending")}>Days→pending{sortArrow("daysToPending")}</th>
@@ -140,6 +174,7 @@ export default function MarketFinder({ initial, canRefresh }: { initial: ScanSto
                       <span className="inline-flex items-center gap-1 font-bold text-slate-800"><span className={`inline-block h-2 w-2 rounded-full ${TIER[c.tier].dot}`} />{c.score}</span>
                       <span className="ml-1 text-[10px] text-slate-400">{TIER[c.tier].label}</span>
                     </td>
+                    <td className="px-2 py-1.5">{(() => { const m = mi(c); return <div className="flex items-center gap-1.5"><MarketGauge mi={m} /><span className={`hidden rounded px-1 text-[9px] font-bold ring-1 xl:inline ${miChip(m.index)}`}>{m.tilt.includes("buyer") ? "Buyer" : m.tilt.includes("seller") ? "Seller" : "Even"}</span></div>; })()}</td>
                     <td className="px-2 py-1.5 font-semibold text-slate-700">{money(c.medianSalePrice)}</td>
                     <td className={`px-2 py-1.5 font-semibold ${c.yoyPct == null ? "text-slate-400" : c.yoyPct >= 0 ? "text-emerald-600" : "text-rose-500"}`}>{pct(c.yoyPct)}</td>
                     <td className="px-2 py-1.5 text-slate-600">{c.daysToPending == null ? "—" : `${Math.round(c.daysToPending)}d`}</td>
@@ -149,7 +184,28 @@ export default function MarketFinder({ initial, canRefresh }: { initial: ScanSto
                   </tr>
                   {open === c.fips && (
                     <tr className="border-b border-slate-100 bg-slate-50/80">
-                      <td colSpan={8} className="px-3 py-2">
+                      <td colSpan={9} className="px-3 py-2">
+                        {/* 📊 Zillow-style Market Insights card — buyer↔seller gauge + supply/demand tiles */}
+                        {(() => {
+                          const m = mi(c);
+                          const ls = landSoldFor(c.fips);
+                          const tile = (val: string, lab: string, cls = "text-slate-800") => (
+                            <div className="rounded-lg bg-white px-2.5 py-1.5 ring-1 ring-slate-200"><div className={`text-sm font-extrabold ${cls}`}>{val}</div><div className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">{lab}</div></div>
+                          );
+                          return (
+                            <div className="mb-2 flex flex-wrap items-center gap-3 rounded-xl bg-white p-2.5 ring-1 ring-slate-200">
+                              <div className="shrink-0"><div className="mb-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">Market insights for {c.name.replace(/ County$/, "")}</div><MarketGauge mi={m} big /></div>
+                              <div className="flex flex-1 flex-wrap gap-1.5">
+                                {tile(c.yoyPct == null ? "—" : pct(c.yoyPct), "1-yr price trend", c.yoyPct == null ? "text-slate-400" : c.yoyPct >= 0 ? "text-emerald-600" : "text-rose-500")}
+                                {tile(c.daysToPending == null ? "N/A" : `${Math.round(c.daysToPending)}d`, "Days to pending")}
+                                {tile(c.inventory == null ? "—" : Math.round(c.inventory).toLocaleString(), "Active listings")}
+                                {tile(c.trends?.landSold?.d30 != null ? c.trends.landSold.d30.toLocaleString() : "—", "Land sold · 30d")}
+                                {tile(ls ? `${Math.round(ls.share * 100)}%` : "—", "Sold ≥$100k")}
+                              </div>
+                              <div className={`w-full rounded-lg px-2.5 py-1.5 text-[11px] font-semibold ring-1 ${miChip(m.index)}`}>{m.repHint}</div>
+                            </div>
+                          );
+                        })()}
                         <ul className="space-y-0.5 text-[11px] text-slate-600">
                           {c.reasons.map((r, i) => <li key={i}>• {r}</li>)}
                           {c.land ? (
@@ -168,7 +224,7 @@ export default function MarketFinder({ initial, canRefresh }: { initial: ScanSto
         </div>
       )}
       <p className="mt-2 text-[10px] text-slate-400">
-        Opportunity = home-price tier + YoY trend + days-to-pending liquidity{landLive ? " + share of land assessing ≥$100k" : ""}. Click a row for the why. Land value is the assessor&apos;s land value (reliable), not the land AVM.
+        Opportunity = home-price tier + YoY trend + days-to-pending liquidity{landLive ? " + share of land assessing ≥$100k" : ""}. <b>Market</b> = buyer↔seller index (0 = strong buyer&apos;s market / motivated sellers · 100 = strong seller&apos;s market), from days-to-pending + price trend + land-sales trend + for-sale supply. Click a row for the Market Insights card. Land value is the assessor&apos;s land value (reliable), not the land AVM.
       </p>
     </section>
   );

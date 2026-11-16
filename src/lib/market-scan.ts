@@ -66,6 +66,9 @@ export type CountyScan = {
 export type ScanStore = {
   asOf: string; zillowAsOf: string | null; landConfigured: boolean; landDone: number; counties: CountyScan[];
 };
+// 📊 The buyer↔seller Market Index lives in its own client-safe module (src/lib/market-index.ts) so
+// client components can import it without pulling this file's server deps (db/DealMachine) into the bundle.
+export { buyerSellerIndex, type MarketIndex, type MarketTilt } from "@/lib/market-index";
 
 // ── minimal CSV (handles double-quoted fields with embedded commas, e.g. the Metro column) ──
 function parseCsvLine(line: string): string[] {
