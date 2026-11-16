@@ -322,6 +322,32 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       />
       <DstReminder />
 
+      {/* 📅 Google Calendar sync (owner) — time-off requests + holidays mirror onto a shared
+          "Freedom Offers — Time Off" calendar you subscribe to once. Pinned near the top so it's
+          easy to find (Jon 2026-11-16). */}
+      {isOwner(me) && (
+        <section id="gcal-sync">
+          <h3 className="mb-2 text-sm font-bold text-slate-700">📅 Google Calendar sync</h3>
+          <Card className="space-y-2 p-3 text-sm">
+            {sp.holsync && (
+              <div className={`rounded-lg px-3 py-2 text-[13px] font-semibold ${sp.holsync === "notconfigured" ? "bg-amber-50 text-amber-800 ring-1 ring-amber-200" : sp.holsync === "error" ? "bg-red-50 text-red-700 ring-1 ring-red-200" : "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200"}`}>
+                {sp.holsync === "notconfigured" ? "⚠️ Google Calendar isn't connected yet (no service account) — the sync can't run until that's set up." : sp.holsync === "error" ? "⚠️ Sync hit an error — try again in a moment." : `✅ Synced holidays to Google Calendar (${sp.holsync.replace("added-", " added, ").replace("removed", " removed")}).`}
+              </div>
+            )}
+            <p className="text-slate-600">Approved time-off and team holidays post to a shared <b>&ldquo;Freedom Offers — Time Off&rdquo;</b> Google Calendar. Add it once and it shows alongside your own calendar.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <form action={syncHolidaysNowAction}>
+                <button type="submit" className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-1.5 text-sm font-semibold text-white hover:bg-slate-900">📅 Sync upcoming holidays now</button>
+              </form>
+              {settings.timeoffCalendarId && (
+                <a href={`https://calendar.google.com/calendar/u/0/r?cid=${encodeURIComponent(settings.timeoffCalendarId)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-700">➕ Add the Time-Off calendar to my Google Calendar</a>
+              )}
+            </div>
+            {!settings.timeoffCalendarId && <p className="text-[13px] text-slate-500">The shared calendar is created the first time a holiday or time-off syncs — tap &ldquo;Sync now,&rdquo; then an &ldquo;Add to my calendar&rdquo; link appears here.</p>}
+          </Card>
+        </section>
+      )}
+
       {/* LIVE AVAILABILITY */}
       <section>
         <div className="mb-2 flex items-baseline justify-between">
@@ -722,31 +748,6 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           </div>
           <Card className="p-3">
             <HolidaysPanel holidays={holidayRows} canEdit={manager} />
-          </Card>
-        </section>
-      )}
-
-      {/* 📅 Google Calendar sync (owner) — time-off requests + holidays mirror onto a shared
-          "Freedom Offers — Time Off" calendar. Subscribe to it once so it shows in your Google
-          Calendar alongside your own. Jon 2026-11-16. */}
-      {isOwner(me) && (
-        <section id="holidays">
-          <h3 className="mb-2 text-sm font-bold text-slate-700">📅 Google Calendar sync</h3>
-          <Card className="space-y-2 p-3 text-sm">
-            {sp.holsync && (
-              <div className={`rounded-lg px-3 py-2 text-[13px] font-semibold ${sp.holsync === "notconfigured" ? "bg-amber-50 text-amber-800 ring-1 ring-amber-200" : sp.holsync === "error" ? "bg-red-50 text-red-700 ring-1 ring-red-200" : "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200"}`}>
-                {sp.holsync === "notconfigured" ? "⚠️ Google Calendar isn't connected yet (no service account) — the sync can't run until that's set up." : sp.holsync === "error" ? "⚠️ Sync hit an error — try again in a moment." : `✅ Synced holidays to Google Calendar (${sp.holsync.replace("added-", " added, ").replace("removed", " removed")}).`}
-              </div>
-            )}
-            <p className="text-slate-600">Approved time-off and team holidays post to a shared <b>&ldquo;Freedom Offers — Time Off&rdquo;</b> Google Calendar. Add it once and it shows alongside your own calendar.</p>
-            {settings.timeoffCalendarId ? (
-              <a href={`https://calendar.google.com/calendar/u/0/r?cid=${encodeURIComponent(settings.timeoffCalendarId)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-700">➕ Add the Time-Off calendar to my Google Calendar</a>
-            ) : (
-              <p className="text-[13px] text-slate-500">The shared calendar is created the first time a holiday or time-off syncs — tap the button below, then this will show an &ldquo;Add to my calendar&rdquo; link.</p>
-            )}
-            <form action={syncHolidaysNowAction}>
-              <button type="submit" className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-1.5 text-sm font-semibold text-white hover:bg-slate-900">📅 Sync upcoming holidays now</button>
-            </form>
           </Card>
         </section>
       )}
