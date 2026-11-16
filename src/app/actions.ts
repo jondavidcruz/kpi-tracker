@@ -894,6 +894,25 @@ export async function saveLeadershipSettings(formData: FormData) {
   redirect("/leadership?saved=Deck+content#edit");
 }
 
+// 🎥 Owner-editable Google Meet links for the three sidebar meeting tiles (Office / Monday /
+// Leadership), updatable right from where they show in the sidebar (Jon 2026-11-16). Owner-only.
+// huddleMeetLink = Office, teamMeetLink = Monday, leadershipMeetLink = Leadership.
+export async function saveMeetLinksAction(formData: FormData) {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  const clean = (v: FormDataEntryValue | null) => {
+    const s = String(v ?? "").trim();
+    return s && !/^https?:\/\//i.test(s) ? `https://${s}` : s; // tolerate a pasted bare meet.google.com/… link
+  };
+  const data = {
+    huddleMeetLink: clean(formData.get("huddleMeetLink")),
+    teamMeetLink: clean(formData.get("teamMeetLink")),
+    leadershipMeetLink: clean(formData.get("leadershipMeetLink")),
+  };
+  await db.settings.upsert({ where: { id: 1 }, update: data, create: { id: 1, ...data } });
+  revalidatePath("/", "layout"); // the sidebar (meeting tiles) lives in the app shell on every page
+}
+
 /** Capture a feedback note during a meeting. Managers only. */
 export async function addMeetingNote(formData: FormData) {
   const me = await getCurrentUser();
@@ -5331,5 +5350,27 @@ export async function setHolidayOffAction(formData: FormData) {
   const payload = JSON.stringify(map);
   if (row) await db.resource.update({ where: { id: row.id }, data: { description: payload } });
   else await db.resource.create({ data: { title: "holidays", category: "__holidays__", url: "", description: payload } });
+  // 📅 Reflect the holiday on the shared Google Calendar (Jon 2026-11-16): on = add an all-day
+  // event, off = remove it. Look up the holiday's name for a clean event title. Best-effort.
+  try {
+    const { federalHolidays } = await import("@/lib/holidays");
+    const { syncHolidayOffEvent } = await import("@/lib/gcal");
+    const hol = federalHolidays(Number(date.slice(0, 4))).find((h) => h.date === date);
+    await syncHolidayOffEvent(date, hol ? hol.name : "Company holiday", off);
+  } catch { /* calendar sync is best-effort — never block the toggle */ }
   revalidatePath("/schedule");
+}
+
+// 📅 Owner: push every upcoming day-off holiday onto the shared Google Calendar now (so the
+// default-off majors appear without waiting for the daily cron). Jon 2026-11-16.
+export async function syncHolidaysNowAction() {
+  const me = await getCurrentUser();
+  if (!isOwner(me)) return;
+  let result = "error";
+  try {
+    const { reconcileHolidayCalendar, gcalConfigured } = await import("@/lib/gcal");
+    if (!gcalConfigured()) result = "notconfigured";
+    else { const r = await reconcileHolidayCalendar().catch(() => null); result = r ? `${r.added}added-${r.removed}removed` : "error"; }
+  } catch { result = "error"; }
+  redirect(`/schedule?holsync=${result}#holidays`); // outside try/catch so the redirect isn't swallowed
 }

@@ -654,6 +654,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, results });
   }
 
+  // 📅 Holiday → Google Calendar reconcile (?holidaysync=1, daily cron — Jon 2026-11-16).
+  // Ensures every upcoming team day-off holiday (the default-off majors + manager overrides) has an
+  // all-day event on the shared "Time Off" calendar, and removes any that flipped to a working day.
+  // Manager toggles sync instantly; this catches the defaults nobody toggled + the year rollover.
+  if (url.searchParams.get("holidaysync") === "1") {
+    const { reconcileHolidayCalendar, gcalConfigured } = await import("@/lib/gcal");
+    if (!gcalConfigured()) return NextResponse.json({ ok: false, job: "holidaysync", error: "gcal not configured" });
+    const r = await reconcileHolidayCalendar().catch(() => null);
+    return NextResponse.json({ ok: true, job: "holidaysync", ...(r ?? { added: 0, removed: 0 }) });
+  }
+
   // 📡 Telnyx spend (?telnyxspend=1, daily cron): month-to-date cost from
   // detail records (voice + messaging, covers War Room AND Direct REI lines),
   // current balance, and a straight-line monthly projection → Resource

@@ -8,7 +8,7 @@ import {
   Bell, ShieldAlert, Headphones, Ticket, Sparkles, Settings, LogOut, Menu, X, TrendingUp, Briefcase, Presentation, Crown, Lightbulb, Bot, ScrollText, Users, Lock, Mountain, Flag, Compass, KeyRound, Megaphone, Map, CalendarClock, Calculator, Workflow, Wallet, Target, Gift, GraduationCap, Receipt, Activity, Search, BookOpen, UserPlus, Phone, ShieldCheck, MessagesSquare, ListChecks, Contact,
   Play, Banknote, TrafficCone, Moon, Sun, Signature,
 } from "lucide-react";
-import { signOut } from "@/app/actions";
+import { signOut, saveMeetLinksAction } from "@/app/actions";
 import Logo from "./Logo";
 import WorldClock from "./WorldClock";
 
@@ -82,6 +82,7 @@ export default function Sidebar({
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [editMeet, setEditMeet] = useState(false); // owner: inline edit of the three Meet links
   const [query, setQuery] = useState("");
   // 🖥 desktop sidebar collapse (Jon 2026-10-13: "minimize like on a MacBook") —
   // hides the rail to reclaim screen width, persisted per device.
@@ -313,27 +314,65 @@ export default function Sidebar({
           <div className="font-mono tracking-wider">☎️ 1-877-652-8991</div>
         </div>
         <WorldClock />
-        {(officeMeetLink || mondayMeetLink || leadershipMeetLink) && (
+        {(officeMeetLink || mondayMeetLink || leadershipMeetLink || owner) && (
           // 🎛 compact meeting tiles (Jon 2026-10-09): three small squares —
-          // Office · Monday · Leadership — visible, not space-hogging
-          <div className="mt-3 grid grid-cols-3 gap-1.5">
-            {officeMeetLink && (
-              <a href={officeMeetLink} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)} title="Freedom Offers Office (Meet)"
-                className="flex flex-col items-center gap-0.5 rounded-lg bg-emerald-600/90 px-1 py-2 text-white hover:bg-emerald-600">
-                <span className="text-base leading-none">🎥</span><span className="text-[9px] font-bold leading-tight">Office</span>
-              </a>
+          // Office · Monday · Leadership — visible, not space-hogging. Owner can edit the links inline.
+          <div className="mt-3">
+            <div className="grid grid-cols-3 gap-1.5">
+              {officeMeetLink ? (
+                <a href={officeMeetLink} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)} title="Freedom Offers Office (Meet)"
+                  className="flex flex-col items-center gap-0.5 rounded-lg bg-emerald-600/90 px-1 py-2 text-white hover:bg-emerald-600">
+                  <span className="text-base leading-none">🎥</span><span className="text-[9px] font-bold leading-tight">Office</span>
+                </a>
+              ) : owner ? (
+                <button onClick={() => setEditMeet(true)} title="Set the Office Meet link" className="flex flex-col items-center gap-0.5 rounded-lg bg-white/5 px-1 py-2 text-white/50 ring-1 ring-dashed ring-white/20 hover:bg-white/10">
+                  <span className="text-base leading-none">🎥</span><span className="text-[9px] font-bold leading-tight">Office +</span>
+                </button>
+              ) : null}
+              {mondayMeetLink ? (
+                <a href={mondayMeetLink} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)} title="Monday Meeting (Meet)"
+                  className="flex flex-col items-center gap-0.5 rounded-lg bg-white/10 px-1 py-2 text-white ring-1 ring-white/15 hover:bg-white/15">
+                  <span className="text-base leading-none">📋</span><span className="text-[9px] font-bold leading-tight">Monday</span>
+                </a>
+              ) : owner ? (
+                <button onClick={() => setEditMeet(true)} title="Set the Monday Meeting Meet link" className="flex flex-col items-center gap-0.5 rounded-lg bg-white/5 px-1 py-2 text-white/50 ring-1 ring-dashed ring-white/20 hover:bg-white/10">
+                  <span className="text-base leading-none">📋</span><span className="text-[9px] font-bold leading-tight">Monday +</span>
+                </button>
+              ) : null}
+              {leadershipMeetLink ? (
+                <a href={leadershipMeetLink} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)} title="Friday Leadership Meeting (Meet)"
+                  className="flex flex-col items-center gap-0.5 rounded-lg bg-violet-500/80 px-1 py-2 text-white hover:bg-violet-500">
+                  <span className="text-base leading-none">👑</span><span className="text-[9px] font-bold leading-tight">Leaders</span>
+                </a>
+              ) : owner ? (
+                <button onClick={() => setEditMeet(true)} title="Set the Leadership Meet link" className="flex flex-col items-center gap-0.5 rounded-lg bg-white/5 px-1 py-2 text-white/50 ring-1 ring-dashed ring-white/20 hover:bg-white/10">
+                  <span className="text-base leading-none">👑</span><span className="text-[9px] font-bold leading-tight">Leaders +</span>
+                </button>
+              ) : null}
+            </div>
+            {owner && !editMeet && (
+              <button onClick={() => setEditMeet(true)} className="mt-1 w-full rounded text-[9px] font-semibold text-white/40 hover:text-white/80">✏️ edit meeting links</button>
             )}
-            {mondayMeetLink && (
-              <a href={mondayMeetLink} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)} title="Monday Meeting (Meet)"
-                className="flex flex-col items-center gap-0.5 rounded-lg bg-white/10 px-1 py-2 text-white ring-1 ring-white/15 hover:bg-white/15">
-                <span className="text-base leading-none">📋</span><span className="text-[9px] font-bold leading-tight">Monday</span>
-              </a>
-            )}
-            {leadershipMeetLink && (
-              <a href={leadershipMeetLink} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)} title="Friday Leadership Meeting (Meet)"
-                className="flex flex-col items-center gap-0.5 rounded-lg bg-violet-500/80 px-1 py-2 text-white hover:bg-violet-500">
-                <span className="text-base leading-none">👑</span><span className="text-[9px] font-bold leading-tight">Leaders</span>
-              </a>
+            {owner && editMeet && (
+              <form action={saveMeetLinksAction} onSubmit={() => setTimeout(() => setEditMeet(false), 50)} className="mt-2 space-y-1.5 rounded-lg bg-black/30 p-2 ring-1 ring-white/15">
+                <div className="text-[9px] font-bold uppercase tracking-wide text-white/50">Google Meet links</div>
+                <label className="block">
+                  <span className="text-[9px] text-emerald-300">🎥 Office</span>
+                  <input name="huddleMeetLink" defaultValue={officeMeetLink} placeholder="meet.google.com/…" className="w-full rounded bg-white/10 px-1.5 py-1 text-[10px] text-white placeholder:text-white/30 ring-1 ring-white/15 focus:ring-emerald-400" />
+                </label>
+                <label className="block">
+                  <span className="text-[9px] text-white/70">📋 Monday</span>
+                  <input name="teamMeetLink" defaultValue={mondayMeetLink} placeholder="meet.google.com/…" className="w-full rounded bg-white/10 px-1.5 py-1 text-[10px] text-white placeholder:text-white/30 ring-1 ring-white/15 focus:ring-sky-400" />
+                </label>
+                <label className="block">
+                  <span className="text-[9px] text-violet-300">👑 Leadership</span>
+                  <input name="leadershipMeetLink" defaultValue={leadershipMeetLink} placeholder="meet.google.com/…" className="w-full rounded bg-white/10 px-1.5 py-1 text-[10px] text-white placeholder:text-white/30 ring-1 ring-white/15 focus:ring-violet-400" />
+                </label>
+                <div className="flex gap-1.5">
+                  <button type="submit" className="flex-1 rounded bg-brand-gold px-2 py-1 text-[10px] font-bold text-black hover:brightness-110">Save</button>
+                  <button type="button" onClick={() => setEditMeet(false)} className="rounded bg-white/10 px-2 py-1 text-[10px] font-semibold text-white/70 hover:bg-white/15">Cancel</button>
+                </div>
+              </form>
             )}
           </div>
         )}

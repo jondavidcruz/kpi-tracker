@@ -172,3 +172,68 @@ export async function deleteTimeOffEvent(eventId: string): Promise<void> {
     await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(eventId)}`, { method: "DELETE", headers: { Authorization: `Bearer ${tok}` } });
   } catch (err) { console.error("[gcal] event delete error:", err); }
 }
+
+// ── Team HOLIDAYS on the shared calendar (Jon 2026-11-16: "holidays that are off should reflect on
+// our Google Calendar too"). Holiday days-off come from a different path than TimeOff — the federal
+// holiday list in lib/holidays.ts + manager overrides in Resource __holidays__ — so they need their
+// own sync. We track date→eventId in Resource __holiday_gcal__ so toggling off→working removes it.
+const HOLIDAY_MAP_CAT = "__holiday_gcal__";
+async function readHolidayMap(): Promise<{ rowId: string | null; map: Record<string, string> }> {
+  const row = await db.resource.findFirst({ where: { category: HOLIDAY_MAP_CAT } });
+  let map: Record<string, string> = {};
+  try { map = row?.description ? JSON.parse(row.description) : {}; } catch { /* fresh */ }
+  return { rowId: row?.id ?? null, map };
+}
+async function writeHolidayMap(rowId: string | null, map: Record<string, string>) {
+  const description = JSON.stringify(map);
+  if (rowId) await db.resource.update({ where: { id: rowId }, data: { description } }).catch(() => {});
+  else await db.resource.create({ data: { title: "holiday-gcal", category: HOLIDAY_MAP_CAT, url: "", description } }).catch(() => {});
+}
+
+/** Put a single holiday on (off=true) or off (off=false) the shared calendar, idempotently. */
+export async function syncHolidayOffEvent(date: string, name: string, off: boolean): Promise<void> {
+  if (!gcalConfigured() || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  try {
+    const { rowId, map } = await readHolidayMap();
+    if (off && !map[date]) {
+      const id = await createTimeOffEvent({ name, type: "holiday", startDate: date, endDate: date }).catch(() => null);
+      if (id) { map[date] = id; await writeHolidayMap(rowId, map); }
+    } else if (!off && map[date]) {
+      await deleteTimeOffEvent(map[date]).catch(() => {});
+      delete map[date]; await writeHolidayMap(rowId, map);
+    }
+  } catch (err) { console.error("[gcal] holiday sync error:", err); }
+}
+
+/** Reconcile the whole upcoming holiday window with the calendar — creates events for every
+ * day-off holiday (defaults + overrides), removes any that flipped to a working day, and prunes
+ * past entries. Safe to run daily from cron; covers the default-off majors nobody toggled. */
+export async function reconcileHolidayCalendar(): Promise<{ added: number; removed: number } | null> {
+  if (!gcalConfigured()) return null;
+  try {
+    const { federalHolidays, isDayOff } = await import("@/lib/holidays");
+    const today = new Date().toISOString().slice(0, 10);
+    const horizon = new Date(Date.now() + 200 * 86_400_000).toISOString().slice(0, 10);
+    const ovRow = await db.resource.findFirst({ where: { category: "__holidays__" } });
+    let overrides: Record<string, boolean> = {};
+    try { overrides = ovRow?.description ? JSON.parse(ovRow.description) : {}; } catch { /* none */ }
+    const y = Number(today.slice(0, 4));
+    const holidays = [...federalHolidays(y), ...federalHolidays(y + 1)].filter((h) => h.date >= today && h.date <= horizon);
+    const { rowId, map } = await readHolidayMap();
+    let added = 0, removed = 0;
+    for (const h of holidays) {
+      const off = isDayOff(h.date, overrides);
+      if (off && !map[h.date]) {
+        const id = await createTimeOffEvent({ name: h.name, type: "holiday", startDate: h.date, endDate: h.date }).catch(() => null);
+        if (id) { map[h.date] = id; added++; }
+      } else if (!off && map[h.date]) {
+        await deleteTimeOffEvent(map[h.date]).catch(() => {});
+        delete map[h.date]; removed++;
+      }
+    }
+    // Prune events for dates now in the past (keep the map lean).
+    for (const d of Object.keys(map)) if (d < today) delete map[d];
+    await writeHolidayMap(rowId, map);
+    return { added, removed };
+  } catch (err) { console.error("[gcal] holiday reconcile error:", err); return null; }
+}
