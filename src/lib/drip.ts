@@ -83,16 +83,18 @@ DRIP_SEQUENCES.push(
     ],
   },
   {
-    key: "offer_negotiate", name: "Offer made — answer questions + close the gap (6 touches / ~21 days)",
-    // After we've given an offer: keep checking for questions and nudging toward a yes. Emails are
-    // allowed here (we've sent an offer → we have their real email).
+    key: "offer_negotiate", name: "Offer made — chase questions + 72h expiration close (6 texts / ~10 days)", autoSend: true,
+    // 📣 Jon 2026-11-16: once we've SENT an offer, keep TEXTING to surface the seller's questions /
+    // thoughts (so reps aren't manually calling all day), building to a final "offer expires in 72
+    // hours" urgency push. ALL TEXT, Level 2 auto-send; a reply stops it. Neutral local-buyer tone,
+    // rep first name only (no company / website — honored by the copy + scrubOwnerIdentity backstop).
     steps: [
-      { channel: "sms", delayDays: 0, sms: "Hi {first}, following up on the offer for {address}. Is the number close for you, or is there anything we can adjust to make it work?" },
-      { channel: "email", delayDays: 2, emailSubject: "Any questions on your offer for {address}?", emailBody: "Hi {first},\n\nJust making sure you got the offer for {address} and that everything made sense. If any part of it is unclear — the price, how closing works, timing — I'm glad to walk you through it on a quick call. What questions can I answer?\n\n— {rep}" },
-      { channel: "sms", delayDays: 5, sms: "{first}, any thoughts on the offer for {address}? If the number isn't quite there, tell me what you had in mind and I'll see what I can do." },
-      { channel: "email", delayDays: 9, emailSubject: "Can we make {address} work?", emailBody: "Hi {first},\n\nI'd really like to find a number that works for both of us on {address}. If you tell me what you'd need to feel good about it, I'll do my best to get there — happy to hop on a quick call anytime.\n\n— {rep}" },
-      { channel: "sms", delayDays: 14, sms: "{first}, still happy to work with you on {address}. Just reply with the number that gets us there and I'll do everything I can." },
-      { channel: "sms", delayDays: 21, sms: "Hi {first}, checking in one more time on {address}. The offer's still good — would a quick 2-minute call help you decide? Just tell me a time.", book: true },
+      { channel: "sms", delayDays: 0, sms: "Hi {first}, it's {rep} — did the offer for {address} come through okay? What questions do you have on it? Happy to walk you through the price or how closing works." },
+      { channel: "sms", delayDays: 2, sms: "{first}, what are your thoughts on the offer for {address}? If the number's close, tell me what you had in mind and I'll see what I can do." },
+      { channel: "sms", delayDays: 4, sms: "{first}, I don't want to lose you on {address} over a quick question — what's the one thing you'd need to feel good about moving forward?" },
+      { channel: "sms", delayDays: 6, sms: "{first}, still want to make {address} work for you — I can close fast, cash, on your timeline. Would a quick 2-minute call be easier? Just tell me a good time.", book: true },
+      { channel: "sms", delayDays: 8, sms: "{first}, checking in on {address}. If the offer isn't quite right, just reply with the number that works for you and I'll do everything I can to get there." },
+      { channel: "sms", delayDays: 10, sms: "{first}, I have to finalize my numbers — this cash offer on {address} expires in 72 hours. If you'd like to move forward or counter, just reply and we'll get it done." },
     ],
   },
   {
