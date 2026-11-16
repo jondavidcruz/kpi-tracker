@@ -12,6 +12,7 @@ import { todayStr } from "@/lib/date";
 import { readPipelines, parseTags, pipelineLockFor } from "@/lib/crm";
 import { Card, SectionTitle } from "@/components/ui";
 import CrmKanban, { type CrmCard } from "@/components/CrmKanban";
+import NewLeadFields from "@/components/NewLeadFields";
 import PipelineSelect from "@/components/PipelineSelect";
 import CrmViewSelect from "@/components/CrmViewSelect";
 import SelectAllBox from "@/components/SelectAllBox";
@@ -458,10 +459,9 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
                 <option value="">Select a source…</option>
                 {LEAD_SOURCES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select></label>
-              <label className="block"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Assigned to</span><select name="assignedTo" defaultValue={me?.name ?? ""} className={inputCls}>
-                {reps.map((r) => <option key={r.id} value={r.name}>{r.name}</option>)}
-              </select></label>
             </div>
+            {/* 🎯 Pipeline + Stage + Lead type + Owner (Jon 2026-11-16) */}
+            <NewLeadFields pipelines={allPipes.map((p) => ({ name: p.name, stages: p.stages.map((s) => ({ key: s.key, label: s.label })) }))} reps={reps.map((r) => r.name)} defaultOwner={me?.name ?? ""} />
             <label className="block"><span className="mb-0.5 block text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Notes — everything from the first call (lands on the timeline instantly)</span><textarea name="notes" rows={3} placeholder={"motivated — behind on taxes\nwants to close in 30 days\nquoted ~$80k on the phone"} className={inputCls} /></label>
             <div className="flex items-center gap-3">
               <button className="rounded-lg bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-700">Add lead</button>

@@ -146,22 +146,30 @@ export async function createCrmLeadAction(formData: FormData) {
     : null;
   // APN (land) → formData.property.apn (same place the full card + dispo board read it);
   // lead source → formData.__leadSource (canonical, same as the opportunity cards).
+  // 🎚 Chosen STAGE (Jon 2026-11-16): the New-lead form can pick the stage; validate it belongs to the
+  // landing pipeline, else fall back to that pipeline's first stage.
+  const wantStage = String(formData.get("stage") ?? "").trim();
+  const stageKey = (wantStage && landPipe?.stages.some((s) => s.key === wantStage)) ? wantStage : (landPipe?.stages[0]?.key ?? "new");
+  // 🏡🏕 Chosen LEAD TYPE (Jon 2026-11-16): House/Land → formData.__leadKind (same flag the chips use).
+  const wantKind = String(formData.get("leadKind") ?? "").trim();
   const oppFd: Record<string, unknown> = {
     ...(apn ? { property: { apn } } : {}),
     ...(leadSource ? { __leadSource: leadSource } : {}),
+    ...(wantKind === "home" || wantKind === "land" ? { __leadKind: wantKind } : {}),
   };
   const opp = dupeOpp ?? await db.crmOpportunity.create({ data: {
-    contactId: contact.id, title, stage: landPipe?.stages[0]?.key ?? "new", pipeline: landPipe?.name ?? "",
+    contactId: contact.id, title, stage: stageKey, pipeline: landPipe?.name ?? "",
     assignedTo: owner, ...(Object.keys(oppFd).length ? { formData: oppFd } : {}),
   } });
   // Matched an existing open card? Still backfill APN / lead source if they were blank.
-  if (dupeOpp && (apn || leadSource)) {
+  if (dupeOpp && (apn || leadSource || wantKind === "home" || wantKind === "land")) {
     const prev = (dupeOpp.formData ?? {}) as Record<string, unknown>;
     const prevProp = (prev.property ?? {}) as Record<string, unknown>;
     await db.crmOpportunity.update({ where: { id: dupeOpp.id }, data: { formData: {
       ...prev,
       ...(apn && !prevProp.apn ? { property: { ...prevProp, apn } } : {}),
       ...(leadSource && !prev.__leadSource ? { __leadSource: leadSource } : {}),
+      ...((wantKind === "home" || wantKind === "land") && !prev.__leadKind ? { __leadKind: wantKind } : {}),
     } } }).catch(() => {});
   }
   await logCrmEvent({ contactId: contact.id, oppId: opp.id, kind: "system", body: dupeOpp
