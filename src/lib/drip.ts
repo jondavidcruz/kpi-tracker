@@ -83,7 +83,7 @@ DRIP_SEQUENCES.push(
     ],
   },
   {
-    key: "offer_negotiate", name: "Offer made — chase questions + 72h expiration close (6 texts / ~10 days)", autoSend: true,
+    key: "offer_negotiate", name: "Offer made — chase questions + 72h expiration close (7 texts / ~13 days)", autoSend: true,
     // 📣 Jon 2026-11-16: once we've SENT an offer, keep TEXTING to surface the seller's questions /
     // thoughts (so reps aren't manually calling all day), building to a final "offer expires in 72
     // hours" urgency push. ALL TEXT, Level 2 auto-send; a reply stops it. Neutral local-buyer tone,
@@ -95,6 +95,7 @@ DRIP_SEQUENCES.push(
       { channel: "sms", delayDays: 6, sms: "{first}, still want to make {address} work for you — I can close fast, cash, on your timeline. Would a quick 2-minute call be easier? Just tell me a good time.", book: true },
       { channel: "sms", delayDays: 8, sms: "{first}, checking in on {address}. If the offer isn't quite right, just reply with the number that works for you and I'll do everything I can to get there." },
       { channel: "sms", delayDays: 10, sms: "{first}, I have to finalize my numbers — this cash offer on {address} expires in 72 hours. If you'd like to move forward or counter, just reply and we'll get it done." },
+      { channel: "sms", delayDays: 13, sms: "Hi {first}, the cash offer on {address} has expired for now. If you're still thinking about selling, just reply and I'll see what I can put together for you — no pressure either way." },
     ],
   },
   {
