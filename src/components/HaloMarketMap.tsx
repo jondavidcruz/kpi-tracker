@@ -11,6 +11,12 @@ import type { MarketView } from "@/components/MarketsBoard";
 import type { Territory, TerrStatus } from "@/lib/map-territories";
 import { gradeMarket, directMailReady } from "@/lib/market-grade";
 import type { LeadPin } from "@/lib/lead-pins";
+import { buyerSellerIndex } from "@/lib/market-index";
+
+// 🎚 Buyer↔Seller index → map color (green = buyer's market / motivated sellers · red = seller's market).
+function miColorHex(i: number): string {
+  return i < 30 ? "#059669" : i < 43 ? "#34d399" : i <= 57 ? "#94a3b8" : i <= 70 ? "#fb923c" : "#ef4444";
+}
 import type { BuyerCoverage } from "@/lib/buyer-coverage-map";
 
 type Pt = { lat: number; lng: number };
@@ -161,7 +167,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   // busiest (cyan buyer dots + green buying-power polygons) off until toggled.
   // 🧹 Simplified (Jon 2026-11-11): fog of war removed (the uploaded pulled-list pins now show where
   // we've explored). Kept in state as off so no fog code path runs; it's gone from the UI.
-  const [show, setShow] = useState({ markets: true, buyers: false, terr: true, opp: true, leads: true, power: false, fog: false, lots: false, pull: true });
+  const [show, setShow] = useState({ markets: true, buyers: false, terr: true, opp: true, leads: true, power: false, fog: false, lots: false, pull: true, market: false });
   const [pullZoomR, setPullZoomR] = useState(3); // purple pulled-pin radius grows as you zoom in, so leads stay findable
   const [tools, setTools] = useState(false); // collapse the layer checkboxes + extra tools behind a menu
   const [lotsMsg, setLotsMsg] = useState(""); // feedback for the on-zoom lot layer so you know WHY lots do/don't show
@@ -715,11 +721,14 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
     // 🔎 Opportunity layer — Market Finder county scores (public data). Show target + watch only
     // to keep the map clean; color by tier, size by score. Diamond-ish via a square-ish marker.
     const OPP_COLOR = { target: "#10b981", watch: "#f59e0b", low: "#94a3b8" } as const;
-    if (show.opp) for (const s of scanPoints) {
-      if (s.tier === "low") continue;
+    if (show.opp || show.market) for (const s of scanPoints) {
+      if (s.tier === "low" && !show.market) continue; // in Buyer/Seller view show every scanned county
       const rad = 5 + (s.score / 100) * 7;
+      // 🎚 Buyer↔Seller view recolors each county by its Market Index; otherwise color by opportunity tier.
+      const miV = buyerSellerIndex({ daysToPending: s.dtp, yoyPct: s.yoy, trends: s.trends });
+      const ptColor = show.market ? miColorHex(miV.index) : OPP_COLOR[s.tier];
       // Whole-area coverage (soft gradient) instead of a lone dot — ground radius grows with the score.
-      const mk = areaCover(s.lat, s.lng, OPP_COLOR[s.tier], 7000 + (s.score / 100) * 7000, rad);
+      const mk = areaCover(s.lat, s.lng, ptColor, 7000 + (s.score / 100) * 7000, rad);
       const landLine = s.landShare != null ? `<div>🏕 Land ≥$100k: <b>${Math.round(s.landShare * 100)}%</b> of parcels</div>` : "";
       const t = s.trends;
       // 📈 Land & new-construction VELOCITY — the real "is this market moving?" read (Jon 2026-11-11).
@@ -734,15 +743,21 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
           `</div>`
         : `<div style="color:#94a3b8;font-size:11px;margin:3px 0">📈 Land-sales velocity loading — run a market refresh to fill it in.</div>`;
       const homeYoy = s.yoy != null ? ` · ${s.yoy >= 0 ? "+" : ""}${s.yoy}% YoY` : "";
+      // 🎚 Buyer↔Seller Market Index line (bar + label) — always shown so the popup explains the color.
+      const miLine = `<div style="margin:4px 0;padding:4px 6px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0">` +
+        `<div style="font-weight:700;color:${miColorHex(miV.index)}">🎚 Market ${miV.index}/100 · ${miV.label}</div>` +
+        `<div style="position:relative;height:6px;border-radius:4px;margin-top:3px;background:linear-gradient(90deg,#34d399,#a7f3d0,#e2e8f0,#fecdd3,#fb7185)"><div style="position:absolute;top:-1px;left:${miV.index}%;width:2px;height:8px;background:#0f172a;transform:translateX(-50%)"></div></div>` +
+        `<div style="font-size:10px;color:#64748b;margin-top:2px">${miV.repHint}</div></div>`;
       mk.bindPopup(
         `<div style="font:12px system-ui;min-width:210px"><div style="font-weight:800;font-size:13px">${s.name} <span style="color:#64748b;font-weight:600">${s.state}</span></div>` +
         `<div style="margin:3px 0"><b style="font-size:15px">${s.score}</b> opportunity · ${s.tier === "target" ? "🟢 Target — pull here next" : "🟠 Watch — monitor for now"}${s.testMarket ? ` · <span style="background:#fae8ff;color:#a21caf;border-radius:4px;padding:1px 4px;font-weight:700">🧪 test market</span>` : ""}</div>` +
+        miLine +
         (s.buyers != null ? `<div style="font-weight:700;color:${s.buyers > 0 ? "#0d9488" : "#94a3b8"}">💰 ${s.buyers > 0 ? `${s.buyers} vetted buyer${s.buyers === 1 ? "" : "s"} waiting here` : "No vetted buyers here yet"}</div>` : "") +
         (s.ring ? `<div style="font-weight:700;color:#a21caf">🍩 Conversion ring: <b>${s.ring}</b>/100 — cheap land converting to housing${s.residual ? ` · 🏗 builder budget ~$${Math.round(s.residual / 1000)}k/lot` : ""}</div>` : "") +
         trendBlock + landLine +
         `<div>⏱ ${s.dtp != null ? "~" + Math.round(s.dtp) + " days to pending (homes)" : "—"}</div>` +
         `<div style="color:#94a3b8;font-size:11px;margin-top:3px">🏠 Area home price ${s.price != null ? "$" + Math.round(s.price).toLocaleString() : "—"}${homeYoy} — wealth signal, not land</div></div>`);
-      mk.bindTooltip(`${s.name} · ${s.score}`, { direction: "top", className: "fo-map-label", offset: [0, -rad] });
+      mk.bindTooltip(show.market ? `${s.name} · 🎚 ${miV.index}` : `${s.name} · ${s.score}`, { direction: "top", className: "fo-map-label", offset: [0, -rad] });
     }
 
     const placed = show.markets ? markets.filter((v) => COORDS[v.m.name]) : [];
@@ -769,6 +784,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
     if (!didFitRef.current && !hadSavedViewRef.current) {
       try { map.fitBounds(group.getBounds().pad(0.15)); didFitRef.current = true; } catch { /* no markers */ }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, markets, buyerPoints, territories, show, scanPoints, leadPins, buyerCoverage, closedDeals]);
 
   // Re-measure the map once it's ready (container has its real size by then).
@@ -823,9 +839,14 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
         )}
         {pullMsg && <span className="font-semibold text-purple-300">{pullMsg}</span>}
         {geoMsg && <span className="text-slate-400">{geoMsg}</span>}
-        {tools && (["pull", "leads", "markets", "lots", "terr", "opp", "buyers", "power"] as const).map((k) => (
-          <label key={k} className="flex cursor-pointer items-center gap-1 text-slate-300"><input type="checkbox" checked={show[k]} onChange={(e) => setShow((s) => ({ ...s, [k]: e.target.checked }))} /> {k === "lots" ? "🏘 Lots (zoom in)" : k === "opp" ? "🔎 Opportunity" : k === "markets" ? "🎯 Markets" : k === "buyers" ? "🟢 Buyers" : k === "power" ? "💪 Buying power" : k === "leads" ? "📍 Leads" : k === "terr" ? "🖍 My areas" : "📄 Pulled list"}</label>
+        {tools && (["pull", "leads", "markets", "lots", "terr", "opp", "market", "buyers", "power"] as const).map((k) => (
+          <label key={k} className="flex cursor-pointer items-center gap-1 text-slate-300"><input type="checkbox" checked={show[k]} onChange={(e) => setShow((s) => ({ ...s, [k]: e.target.checked }))} /> {k === "lots" ? "🏘 Lots (zoom in)" : k === "opp" ? "🔎 Opportunity" : k === "market" ? "🎚 Buyer/Seller" : k === "markets" ? "🎯 Markets" : k === "buyers" ? "🟢 Buyers" : k === "power" ? "💪 Buying power" : k === "leads" ? "📍 Leads" : k === "terr" ? "🖍 My areas" : "📄 Pulled list"}</label>
         ))}
+        {tools && show.market && (
+          <span className="flex items-center gap-1 rounded-lg bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-300" title="County color = Buyer↔Seller Market Index">
+            <span className="inline-block h-2 w-10 rounded-full" style={{ background: "linear-gradient(90deg,#059669,#34d399,#94a3b8,#fb923c,#ef4444)" }} /> Buyer&apos;s → Seller&apos;s
+          </span>
+        )}
         {tools && canEdit && <button onClick={runGeocode} disabled={geoBusy} className="rounded-lg bg-cyan-600 px-2.5 py-1 font-bold text-white hover:bg-cyan-700 disabled:opacity-50">{geoBusy ? "Mapping…" : geocodeRemaining > 0 ? `🔄 Map buyer areas (${geocodeRemaining} left)` : "🔄 Re-map buyers"}</button>}
         {tools && canEdit && leadZipsRemaining > 0 && <button onClick={runGeocodeLeads} disabled={geoBusy} className="rounded-lg bg-sky-600 px-2.5 py-1 font-bold text-white hover:bg-sky-700 disabled:opacity-50">{geoBusy ? "Mapping…" : `📍 Map lead locations (${leadZipsRemaining} left)`}</button>}
         {tools && show.lots && lotsMsg && <span className="font-semibold text-sky-300">{lotsMsg}</span>}
