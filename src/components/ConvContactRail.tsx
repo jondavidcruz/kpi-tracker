@@ -11,10 +11,44 @@
 import { useState } from "react";
 import Link from "next/link";
 import { titleCase } from "@/lib/crm-shared";
-import { saveConvContactAction, addPropertyAction, savePropertyAction, addPropertyNoteAction, editCrmNoteAction, deleteCrmNoteAction } from "@/app/crm/actions";
+import { saveConvContactAction, addPropertyAction, savePropertyAction, addPropertyNoteAction, editCrmNoteAction, deleteCrmNoteAction, setOppStageAction } from "@/app/crm/actions";
 
 type Prop = { id: string; title: string; stage: string; pipeline: string; apn: string; createdAt: string };
+type Pipe = { name: string; stages: { key: string; label: string }[] };
 type Contact = { id: string; name: string; phone: string; altPhone: string; email: string; address: string; assignedTo: string; pinnedNote: string; source: string; createdAt: string };
+
+// 🔀 Inline stage/pipeline mover (Jon 2026-11-16: "move leads from here directly to a different
+// stage instead of opening the whole land card"). One grouped dropdown — Pipeline ▸ Stage — so a
+// re-engaged cold replier can be bounced straight to Michelle's follow-up without leaving the inbox.
+// Reuses setOppStageAction (same path as the board drag → fires drip/offer/contract automations).
+function MoveControl({ opp, pipes }: { opp: Prop; pipes: Pipe[] }) {
+  const [open, setOpen] = useState(false);
+  const curPipe = opp.pipeline || (pipes[0]?.name ?? "");
+  const stageLabel = pipes.find((p) => p.name === curPipe)?.stages.find((s) => s.key === opp.stage)?.label || opp.stage;
+  if (!pipes.length) return <span className="truncate text-[11px] font-bold text-slate-700">{curPipe || "War Room"} · {stageLabel}</span>;
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} title="Move this lead to another stage or pipeline" className="group/mv min-w-0 truncate text-left text-[11px] font-bold text-slate-700 hover:text-indigo-600">
+        <span className="truncate">{curPipe || "War Room"} · {stageLabel}</span>
+        <span className="ml-1 text-[9px] font-black text-indigo-400 group-hover/mv:text-indigo-600">↔ move</span>
+      </button>
+    );
+  }
+  return (
+    <form action={setOppStageAction} onSubmit={() => setOpen(false)} className="flex min-w-0 flex-1 items-center gap-1">
+      <input type="hidden" name="id" value={opp.id} />
+      <select name="pipestage" defaultValue={`${curPipe}|||${opp.stage}`} autoFocus className="min-w-0 flex-1 rounded-lg border border-indigo-300 bg-white px-1.5 py-1 text-[11px] font-semibold text-slate-800">
+        {pipes.map((p) => (
+          <optgroup key={p.name} label={p.name}>
+            {p.stages.map((s) => <option key={`${p.name}|${s.key}`} value={`${p.name}|||${s.key}`}>{p.name.replace(/^[^A-Za-z0-9]+/, "").slice(0, 14)} ▸ {s.label}</option>)}
+          </optgroup>
+        ))}
+      </select>
+      <button className="shrink-0 rounded-lg bg-indigo-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-indigo-700">Move</button>
+      <button type="button" onClick={() => setOpen(false)} className="shrink-0 rounded-lg bg-slate-100 px-1.5 py-1 text-[10px] font-bold text-slate-500 hover:bg-slate-200">✕</button>
+    </form>
+  );
+}
 
 function fmtPhone(p: string) {
   return p.replace(/^\+1/, "").replace(/(\d{3})(\d{3})(\d{4})$/, "($1) $2-$3");
@@ -40,7 +74,7 @@ const inp = "mt-0.5 block w-full rounded-lg border border-slate-200 px-2 py-1.5 
 
 type Note = { id: string; body: string; actor: string; at: string };
 
-export default function ConvContactRail({ contact, opps, owners, canEdit, notes = [], meName = "" }: { contact: Contact; opps: Prop[]; owners: string[]; canEdit: boolean; notes?: Note[]; meName?: string }) {
+export default function ConvContactRail({ contact, opps, owners, canEdit, notes = [], meName = "", pipes = [] }: { contact: Contact; opps: Prop[]; owners: string[]; canEdit: boolean; notes?: Note[]; meName?: string; pipes?: Pipe[] }) {
   const [editing, setEditing] = useState(false);
   const [editNoteId, setEditNoteId] = useState<string | null>(null);
   const { first, last } = splitName(titleCase(contact.name));
@@ -157,7 +191,7 @@ export default function ConvContactRail({ contact, opps, owners, canEdit, notes 
           {opps.map((p) => (
             <div key={p.id} className="rounded-xl bg-slate-50 p-2.5 ring-1 ring-slate-100">
               <div className="mb-1 flex items-center justify-between gap-2">
-                <span className="truncate text-[11px] font-bold text-slate-700">{p.pipeline || "War Room"} · {p.stage}</span>
+                <MoveControl opp={p} pipes={pipes} />
                 <Link href={`/crm/${p.id}`} className="shrink-0 rounded bg-white px-2 py-0.5 text-[10px] font-bold text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100">Open land ↗</Link>
               </div>
               <div className="mb-1.5"><AgeChip iso={p.createdAt} /></div>

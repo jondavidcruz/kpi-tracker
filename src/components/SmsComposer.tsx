@@ -52,9 +52,9 @@ export default function SmsComposer({ oppId, contactId, to, leadName, rep, snipp
   };
   const [sent, setSent] = useState("");
   const [confirming, setConfirming] = useState(false);
-  // ⏳ Undo-send window (Jon 2026-11-05): a 15s hold with an Undo button so a typo or
-  // wrong recipient can be caught before the text actually goes out.
-  const SEND_DELAY = 15;
+  // ⏳ Undo-send window (Jon 2026-11-05; halved to 7s 2026-11-16 — 15s felt too long): a short
+  // hold with an Undo button so a typo or wrong recipient can be caught before the text goes out.
+  const SEND_DELAY = 7;
   const [countdown, setCountdown] = useState<number | null>(null);
   const sendTimer = useRef<ReturnType<typeof setInterval> | null>(null); // visual countdown ONLY
   const sendTimeout = useRef<ReturnType<typeof setTimeout> | null>(null); // the single real send

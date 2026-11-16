@@ -248,19 +248,33 @@ export async function setOppStageAction(formData: FormData) {
   const me = await crmUser();
   if (!me) return;
   const id = String(formData.get("id") ?? "");
-  const stage = String(formData.get("stage") ?? "");
+  // 🔀 Inbox quick-move (Jon 2026-11-16): the Conversations rail sends ONE combined
+  // "pipeline|||stage" value so a lead can be moved to ANOTHER pipeline's stage — e.g. a
+  // re-engaged cold replier bounced straight back to Michelle — without opening the card.
+  // Classic callers still send a bare "stage" (same pipeline); both are handled here.
+  const combo = String(formData.get("pipestage") ?? "");
+  const [comboPipe, comboStage] = combo.includes("|||") ? combo.split("|||") : ["", ""];
+  const stage = (comboStage || String(formData.get("stage") ?? "")).trim();
+  const wantPipeline = (comboPipe || String(formData.get("pipeline") ?? "")).trim();
   const pipes = await readPipelines();
-  let valid = pipes.some((p) => p.stages.some((st) => st.key === stage));
+  // When a target pipeline is named, the stage must belong to THAT pipeline; otherwise accept a
+  // stage that exists in any pipeline (the original board-drag behaviour).
+  const targetPipe = wantPipeline ? pipes.find((p) => p.name === wantPipeline) : null;
+  let valid = targetPipe ? targetPipe.stages.some((st) => st.key === stage) : pipes.some((p) => p.stages.some((st) => st.key === stage));
   if (!valid) {
     // 🏗 Developer / buyer-agent (network) pipelines may use their BUILT-IN default stages when
     // the pipeline isn't saved in the store yet — those keys aren't in readPipelines(), so moves
     // were silently rejected (Jon 2026-10-29: "Marie can't move developers/buyers between stages").
     const { DISPO_NETWORK_PIPELINES } = await import("@/lib/dispo-buyers");
-    valid = DISPO_NETWORK_PIPELINES.some((p) => p.stages.some((st) => st.key === stage));
+    valid = DISPO_NETWORK_PIPELINES.some((p) => (!wantPipeline || p.name === wantPipeline) && p.stages.some((st) => st.key === stage));
   }
   if (!id || !valid) return;
   const opp = await db.crmOpportunity.findUnique({ where: { id }, select: { contactId: true, stage: true, pipeline: true, formData: true } });
-  if (!opp || opp.stage === stage) return;
+  if (!opp) return;
+  // Move the pipeline too when the inbox asked for a different one (and it really differs).
+  const movePipeline = !!wantPipeline && wantPipeline !== (opp.pipeline || "");
+  if (opp.stage === stage && !movePipeline) return; // nothing actually changes
+  if (movePipeline) await logCrmEvent({ contactId: opp.contactId, oppId: id, kind: "system", body: `🏷 Moved ${opp.pipeline || "—"} → ${wantPipeline}`, actor: me.name });
   // 🚦 Option B gate enforcement (Jon 2026-10-21): on a dispo deal, don't let it move
   // FORWARD to a later stage until the gate guarding its current stage is cleared.
   {
@@ -287,6 +301,7 @@ export async function setOppStageAction(formData: FormData) {
   }
   await db.crmOpportunity.update({ where: { id }, data: {
     stage,
+    ...(movePipeline ? { pipeline: wantPipeline } : {}),
     ...(stage === "at_developers" ? { devPricingSentAt: new Date() } : {}),
     ...(stage === "dead" ? { archivedAt: new Date() } : { archivedAt: null }),
   } });
@@ -416,6 +431,7 @@ export async function setOppStageAction(formData: FormData) {
     })().catch(() => {});
   }
   revalidatePath("/crm");
+  revalidatePath("/crm/conversations");
   revalidatePath(`/crm/${id}`);
 }
 

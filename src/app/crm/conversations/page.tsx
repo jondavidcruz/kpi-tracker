@@ -160,6 +160,11 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   const owners = contact && visible
     ? (await db.user.findMany({ where: { active: true }, select: { name: true }, orderBy: { name: "asc" } })).map((u) => u.name)
     : [];
+  // 🔀 Pipelines + stages for the inbox quick-move dropdown (Jon 2026-11-16). Slimmed to
+  // name + stage {key,label} so a lead can be moved to any stage/pipeline from the rail.
+  const railPipes = contact && visible
+    ? (await (await import("@/lib/crm")).readPipelines()).map((p) => ({ name: p.name, stages: p.stages.map((s) => ({ key: s.key, label: s.label })) }))
+    : [];
   // each parcel = one opportunity; APN lives in formData.property.apn
   const railProps = opps.map((o) => {
     const fd = (o.formData ?? {}) as { property?: { apn?: string } };
@@ -359,6 +364,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
               canEdit={true}
               notes={railNotes}
               meName={myFirstName}
+              pipes={railPipes}
             />
           )}
         </div>
