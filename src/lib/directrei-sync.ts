@@ -15,9 +15,16 @@ import { upsertDreiHotLead } from "@/lib/directrei-leads";
 // the app (no Vercel access needed). Env DIRECTREI_LEADS="on" still force-enables.
 const DREI_AUTOCARD_CAT = "__directrei_autocard__";
 async function dreiAutoCardOn(): Promise<boolean> {
-  if (process.env.DIRECTREI_LEADS === "on") return true;
-  const row = await db.resource.findFirst({ where: { category: DREI_AUTOCARD_CAT }, select: { description: true } }).catch(() => null);
-  return (row?.description ?? "on").trim().toLowerCase() !== "off"; // default ON
+  // 🛑 DELETED (Jon 2026-11-16): auto-importing Direct REI repliers into the War
+  // Room is OFF for good. Jon never pulled house sellers, the carded leads had no
+  // real texts attached, and he'd rather the team upload a lead by hand only when
+  // it's a genuine seller. Hard-disabled here so no env/Resource toggle can turn it
+  // back on. To restore, delete this line and the block below works as before.
+  return false;
+  // --- former behaviour (kept for reference) ---
+  // if (process.env.DIRECTREI_LEADS === "on") return true;
+  // const row = await db.resource.findFirst({ where: { category: DREI_AUTOCARD_CAT }, select: { description: true } }).catch(() => null);
+  // return (row?.description ?? "on").trim().toLowerCase() !== "off"; // default ON
 }
 
 export const DREI_FEED_CAT = "__directrei_feed__";

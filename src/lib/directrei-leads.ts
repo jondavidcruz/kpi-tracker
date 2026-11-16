@@ -13,9 +13,15 @@ export const MICHELLE = "Michelle Lagudas";
 // leads on/off from the app without touching Vercel (Jon 2026-11-05 wants instant webhook leads).
 const LEADS_FLAG = "__drei_leads__";
 export async function dreiLeadsOn(): Promise<boolean> {
-  if (process.env.DIRECTREI_LEADS === "on") return true;
-  const row = await db.resource.findFirst({ where: { category: LEADS_FLAG } }).catch(() => null);
-  return row?.description === "on";
+  // 🛑 DELETED (Jon 2026-11-16): the Direct REI → War Room auto-import is off for
+  // good (webhook per-lead create + the cron pull both gate on this). The team
+  // uploads a seller by hand only when it's a real lead. Hard-disabled so no
+  // env/Resource toggle revives it. To restore, remove this line.
+  return false;
+  // --- former behaviour (kept for reference) ---
+  // if (process.env.DIRECTREI_LEADS === "on") return true;
+  // const row = await db.resource.findFirst({ where: { category: LEADS_FLAG } }).catch(() => null);
+  // return row?.description === "on";
 }
 export async function setDreiLeads(on: boolean): Promise<void> {
   const row = await db.resource.findFirst({ where: { category: LEADS_FLAG } }).catch(() => null);
