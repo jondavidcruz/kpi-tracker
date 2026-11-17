@@ -37,6 +37,8 @@ export default function BrowserDialer({ oppId, contactId, phone }: { oppId: stri
     fd.set("secs", String(dur));
     fd.set("to", phone);
     logBrowserCallAction(fd).catch(() => {});
+    // 📞 board counts calls-today per lead (call-twice-then-sink) — Jon 2026-11-17
+    if (oppId) { try { window.dispatchEvent(new CustomEvent("fo-call-ended", { detail: { oppId } })); } catch { /* ok */ } }
     setTimeout(() => setState("idle"), 2500);
   };
 

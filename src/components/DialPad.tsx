@@ -466,6 +466,10 @@ export default function DialPad({ floating = false, owner = false }: { floating?
       fd.set("to", ctx.phone ?? "");
       fd.set("from", ctx.dir === "in" ? "" : lastFromRef.current);
       logBrowserCallAction(fd).catch(() => {});
+      // 📞 Tell the board a call just happened on this lead so it can keep the card
+      // visible until it's been called TWICE, then sink it (Jon 2026-11-17: "we always
+      // call them two times before moving on"). Board-initiated calls carry an oppId.
+      if (ctx.oppId) { try { window.dispatchEvent(new CustomEvent("fo-call-ended", { detail: { oppId: ctx.oppId } })); } catch { /* ok */ } }
     }
     setMsg(dur ? `Ended · ${Math.floor(dur / 60)}m ${dur % 60}s` : (noAnswerRef.current ? "📵 No answer" : "Call ended"));
     noAnswerRef.current = false;

@@ -9,7 +9,7 @@ import { builderSizeMeta } from "@/lib/builder-size";
 import { HEAT_META, cycleHeat, heatRank, type DealHeat } from "@/lib/deal-heat";
 import { STAGE_PROB, titleCase } from "@/lib/crm-shared";
 import { formatAddress } from "@/lib/address";
-import { stageHelp } from "@/lib/stage-help";
+import { stageHelp, UNIVERSAL_RULES } from "@/lib/stage-help";
 import { LEAD_SOURCES } from "@/lib/lead-source";
 
 export type CrmCard = {
@@ -97,6 +97,26 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
   // Default: UNTOUCHED first (Jon 2026-10-27) — leads nobody has worked rise to the top,
   // and the moment you log a touch/note the lead drops toward the bottom.
   const [sortKey, setSortKey] = useState<SortKey>("untouched");
+  // 📞 Calls-today per lead (Jon 2026-11-17: "we always call them twice before moving on").
+  // A lead called ONCE today pins to the top with a "call again" badge so it stays in view
+  // instead of silently sinking; after the 2nd call it flips to "called 2×" and sinks.
+  // Client-only, keyed to today's date in localStorage, resets each day. No schema.
+  const callsKey = () => `fo_crm_calls_${new Date().toISOString().slice(0, 10)}`;
+  const [callsToday, setCallsToday] = useState<Record<string, number>>({});
+  useEffect(() => { try { const raw = localStorage.getItem(callsKey()); if (raw) setCallsToday(JSON.parse(raw)); } catch { /* ok */ } }, []);
+  useEffect(() => {
+    const h = (e: Event) => {
+      const id = (e as CustomEvent).detail?.oppId as string | undefined;
+      if (!id) return;
+      setCallsToday((p) => { const n = { ...p, [id]: (p[id] ?? 0) + 1 }; try { localStorage.setItem(callsKey(), JSON.stringify(n)); } catch { /* ok */ } return n; });
+    };
+    window.addEventListener("fo-call-ended", h);
+    return () => window.removeEventListener("fo-call-ended", h);
+  }, []);
+  // bucket: 0 = called once today (pin TOP, call again) · 1 = normal · 2 = called 2×+ (sink).
+  const callBucket = (c: CrmCard): number => { const n = callsToday[c.id] ?? 0; return n === 1 ? 0 : n >= 2 ? 2 : 1; };
+  // 🧑‍🏫 Which column's automation cheat sheet is open (click the ⓘ to toggle).
+  const [helpCol, setHelpCol] = useState<string | null>(null);
   // 🚀 Perf (Jon 2026-10-29: "developer pipeline lags — 1000+ leads"): render at most COL_CAP
   // cards per column, with a "show more" to expand that column. Keeps the DOM small so big
   // pipelines scroll smoothly; all data is still here (counts show the real totals).
@@ -157,6 +177,9 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
     else if (sortKey === "tz") a.sort((x, y) => ((x.tzRank ?? 9) - (y.tzRank ?? 9)) || ((x.lastTouch ? new Date(x.lastTouch).getTime() : 0) - (y.lastTouch ? new Date(y.lastTouch).getTime() : 0)));
     // 🔥 "heat" = biggest potential spread first (Jon 2026-10-29), then untouched within each level.
     else if (sortKey === "heat") a.sort((x, y) => (heatRank(heatOf(y)) - heatRank(heatOf(x))) || ((x.lastTouch ? new Date(x.lastTouch).getTime() : 0) - (y.lastTouch ? new Date(y.lastTouch).getTime() : 0)));
+    // 📞 call-twice override: lead called once today floats to the very top (call again);
+    // called 2×+ sinks to the bottom. Stable final pass preserves the sort within each bucket.
+    a.sort((x, y) => callBucket(x) - callBucket(y));
     return a; // "fresh" = server order (updated desc)
   };
   const toggleSel = (id: string) => { setStageScope(null); setSelected((s2) => { const n = new Set(s2); if (n.has(id)) n.delete(id); else n.add(id); return n; }); };
@@ -376,15 +399,67 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
               <div className="mb-0.5 flex items-center justify-between px-1">
                 <span className="flex items-center gap-1">
                   <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${col.cls}`}>{col.label}</span>
-                  {(() => { const h = stageHelp(col.label); return h ? (
-                    <span className="group/help relative">
-                      <span className="grid h-4 w-4 cursor-help place-items-center rounded-full bg-white/80 text-[9px] font-extrabold text-slate-400 ring-1 ring-slate-200 hover:text-slate-600">i</span>
-                      <span className="pointer-events-none absolute left-0 top-5 z-50 hidden w-60 rounded-xl bg-slate-900 p-2.5 text-left text-white shadow-xl group-hover/help:block">
-                        <span className="block text-[11px] font-extrabold">{h.title}</span>
-                        <span className="mt-0.5 block text-[10px] font-medium leading-snug text-slate-200">{h.desc}</span>
+                  {(() => {
+                    // 🧑‍🏫 Automation cheat sheet (Jon 2026-11-17): click the ⓘ to see what runs
+                    // automatically in this stage, where leads move, and the rep's job — a training
+                    // aid right on the board. The drip-sequence name is LIVE so it never goes stale.
+                    const h = stageHelp(col.label);
+                    const seqKey = stageSeqMap[col.key];
+                    const seq = seqKey ? seqOpts.find((s) => s.key === seqKey) : null;
+                    if (!h && !seq) return null;
+                    const open = helpCol === col.key;
+                    return (
+                      <span className="relative">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setHelpCol(open ? null : col.key); }}
+                          title="What automations run in this stage, and what moves where"
+                          className={`grid h-4 w-4 cursor-pointer place-items-center rounded-full text-[9px] font-extrabold ring-1 transition ${open ? "bg-indigo-600 text-white ring-indigo-600" : "bg-white/80 text-slate-400 ring-slate-200 hover:text-indigo-600"}`}
+                        >i</button>
+                        {open && (
+                          <>
+                            {/* click-away */}
+                            <span className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setHelpCol(null); }} />
+                            <span className="absolute left-0 top-6 z-50 block max-h-[70vh] w-72 overflow-y-auto rounded-2xl bg-white p-3 text-left shadow-2xl ring-1 ring-slate-200">
+                              <span className="mb-1 flex items-start justify-between gap-2">
+                                <span className="block text-[12px] font-extrabold text-slate-800">{h?.title ?? col.label}</span>
+                                <button onClick={(e) => { e.stopPropagation(); setHelpCol(null); }} className="shrink-0 text-[11px] font-bold text-slate-400 hover:text-slate-700">✕</button>
+                              </span>
+                              {h?.desc && <span className="block text-[10px] font-medium leading-snug text-slate-500">{h.desc}</span>}
+                              {(seq || (h?.autos?.length)) && (
+                                <span className="mt-2 block">
+                                  <span className="block text-[9px] font-extrabold uppercase tracking-wide text-indigo-500">🤖 Runs automatically here</span>
+                                  <span className="mt-0.5 block space-y-0.5">
+                                    {seq && <span className="block text-[10px] font-semibold leading-snug text-slate-700">📨 Sequence “{seq.name}” — {seq.autoSend ? "auto-sends texts" : "creates assist tasks for a rep"}.</span>}
+                                    {h?.autos?.map((a, i) => <span key={i} className="block text-[10px] font-medium leading-snug text-slate-700">{a}</span>)}
+                                  </span>
+                                </span>
+                              )}
+                              {h?.moves?.length ? (
+                                <span className="mt-2 block">
+                                  <span className="block text-[9px] font-extrabold uppercase tracking-wide text-emerald-600">➡️ Moves to</span>
+                                  <span className="mt-0.5 block space-y-0.5">
+                                    {h.moves.map((m, i) => <span key={i} className="block text-[10px] font-medium leading-snug text-slate-700">• {m}</span>)}
+                                  </span>
+                                </span>
+                              ) : null}
+                              {h?.todo && (
+                                <span className="mt-2 block rounded-lg bg-slate-50 p-2">
+                                  <span className="block text-[9px] font-extrabold uppercase tracking-wide text-slate-500">✅ Your job</span>
+                                  <span className="mt-0.5 block text-[10px] font-semibold leading-snug text-slate-800">{h.todo}</span>
+                                </span>
+                              )}
+                              <span className="mt-2 block border-t border-slate-100 pt-1.5">
+                                <span className="block text-[9px] font-extrabold uppercase tracking-wide text-slate-400">🔁 Always true, every stage</span>
+                                <span className="mt-0.5 block space-y-0.5">
+                                  {UNIVERSAL_RULES.map((u, i) => <span key={i} className="block text-[9px] font-medium leading-snug text-slate-500">{u}</span>)}
+                                </span>
+                              </span>
+                            </span>
+                          </>
+                        )}
                       </span>
-                    </span>
-                  ) : null; })()}
+                    );
+                  })()}
                 </span>
                 <span className="flex items-center gap-1">
                   {dialerBase && (counts[col.key] ?? colCards.length) > 0 && (
@@ -420,7 +495,7 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                     onDragEnd={() => { setDragId(null); setOverCol(null); }}
                     onClick={() => selecting ? toggleSel(c.id) : window.dispatchEvent(new CustomEvent("fo-quickview", { detail: { id: c.id } }))}
                     style={c.apptDueToday ? { border: "2px solid #ef4444" } : c.taskDueToday ? { border: "2px solid #22c55e" } : c.followUpDue ? { border: "2px solid #3b82f6" } : ageColor(c) ? { border: `2px solid ${ageColor(c)}` } : undefined}
-                    className={`cursor-pointer rounded-xl p-3.5 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md hover:ring-slate-300 active:cursor-grabbing ${c.apptDueToday ? "bg-red-50/60" : c.taskDueToday ? "bg-emerald-50/50" : c.followUpDue ? "bg-blue-50/50" : "bg-white"} ${dragId === c.id ? "opacity-50" : ""} ${selecting && selected.has(c.id) ? "ring-2 ring-indigo-500" : ""}`}
+                    className={`cursor-pointer rounded-xl p-3.5 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md hover:ring-slate-300 active:cursor-grabbing ${c.apptDueToday ? "bg-red-50/60" : c.taskDueToday ? "bg-emerald-50/50" : c.followUpDue ? "bg-blue-50/50" : "bg-white"} ${dragId === c.id ? "opacity-50" : ""} ${selecting && selected.has(c.id) ? "ring-2 ring-indigo-500" : callBucket(c) === 0 ? "ring-2 ring-amber-400" : ""}`}
                   >
                     <div className="flex items-start gap-1">
                       {selecting && <input type="checkbox" readOnly checked={selected.has(c.id)} className="mr-1 mt-0.5 h-4 w-4 shrink-0 accent-indigo-600" />}
@@ -503,6 +578,9 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                         const cls = d >= 7 ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700";
                         return <span title={`Last worked ${d} days ago (note / call / text / email / task)`} className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${cls}`}>✋ touched {d}d ago</span>;
                       })()}
+                      {/* 📞 call-twice tracker (Jon 2026-11-17) — stays visible until the 2nd call */}
+                      {(callsToday[c.id] ?? 0) === 1 && <span title="Called once today — we call twice before moving on. This card stays pinned at the top until you call again." className="rounded px-1.5 py-0.5 text-[9px] font-extrabold bg-amber-100 text-amber-800 ring-1 ring-amber-300">📞 1st call ✓ · call again</span>}
+                      {(callsToday[c.id] ?? 0) >= 2 && <span title={`Called ${callsToday[c.id]}× today — both attempts done, moved to the bottom of the stack.`} className="rounded px-1.5 py-0.5 text-[9px] font-extrabold bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300">✓ called {callsToday[c.id]}× today</span>}
                       {show.badges && c.badges.map((b, i) => (
                         <span key={i} className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${b.startsWith("⏳") || b.startsWith("🔴") ? "bg-red-50 text-red-700" : b.startsWith("⏰") ? "bg-amber-50 text-amber-700" : "bg-slate-50 text-slate-600"}`}>{b}</span>
                       ))}
