@@ -10,6 +10,11 @@ import { HEAT_META, cycleHeat, heatRank, type DealHeat } from "@/lib/deal-heat";
 import { STAGE_PROB, titleCase } from "@/lib/crm-shared";
 import { formatAddress } from "@/lib/address";
 import { stageHelp, UNIVERSAL_RULES } from "@/lib/stage-help";
+import { seqForStage } from "@/lib/drip-stages";
+import type { DripStep } from "@/lib/drip";
+type SeqOpt = { key: string; name: string; autoSend: boolean; steps: DripStep[] };
+// Show the template tokens as friendly placeholders in the preview (the real send fills them in).
+const prettyMsg = (t: string): string => (t || "").replace(/\{first\}/g, "[their name]").replace(/\{address\}/g, "[property]").replace(/\{rep\}/g, "[you]");
 import { LEAD_SOURCES } from "@/lib/lead-source";
 
 export type CrmCard = {
@@ -137,10 +142,15 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulk, setBulk] = useState({ op: "stage", val: "", val2: "" });
-  // 📨 Automation sequences for the bulk "Start sequence" op (Jon 2026-11-10).
-  const [seqOpts, setSeqOpts] = useState<{ key: string; name: string; autoSend: boolean }[]>([]);
+  // 📨 Automation sequences for the bulk "Start sequence" op (Jon 2026-11-10) + the per-stage
+  // cheat sheet (Jon 2026-11-17): now carries the STEPS so reps see the exact texts + day.
+  const [seqOpts, setSeqOpts] = useState<SeqOpt[]>([]);
   const [stageSeqMap, setStageSeqMap] = useState<Record<string, string>>({});
-  useEffect(() => { fetch("/api/crm/sequences").then((r) => (r.ok ? r.json() : null)).then((j) => { if (j?.seqs) setSeqOpts(j.seqs); if (j?.stageSeq) setStageSeqMap(j.stageSeq); }).catch(() => {}); }, []);
+  useEffect(() => { fetch("/api/crm/sequences").then((r) => (r.ok ? r.json() : null)).then((j) => { if (j?.seqs) setSeqOpts(j.seqs); }).catch(() => {}); }, []);
+  // 🧭 Resolve each column's stage → the sequence that runs in it, using the SAME resolver the
+  // drip engine uses (seqForStage). This is what makes the cheat sheet's live-sequence line and
+  // the "A" automation marker actually appear — the old code read a field the API never sent.
+  useEffect(() => { const m: Record<string, string> = {}; for (const c of columns) { const k = seqForStage(c.key); if (k) m[c.key] = k; } setStageSeqMap(m); }, [columns]);
   // when the rep clicks a stage's "select all N", we target the WHOLE stage
   // server-side (every lead, not just the loaded ~60). null = id-based select.
   const [stageScope, setStageScope] = useState<{ stage: string; count: number } | null>(null);
@@ -406,34 +416,67 @@ export default function CrmKanban({ columns, cards: initial, counts = {}, sums =
                     const h = stageHelp(col.label);
                     const seqKey = stageSeqMap[col.key];
                     const seq = seqKey ? seqOpts.find((s) => s.key === seqKey) : null;
-                    if (!h && !seq) return null;
+                    // Always render the card — even a manual stage should tell the team "no
+                    // automation here, worked by hand" so there's no guessing (Jon 2026-11-17).
                     const open = helpCol === col.key;
+                    const chStyle = (ch: string) => ch === "email" ? "bg-violet-100 text-violet-700" : "bg-sky-100 text-sky-700";
                     return (
-                      <span className="relative">
+                      <span className="relative flex items-center gap-1">
                         <button
                           onClick={(e) => { e.stopPropagation(); setHelpCol(open ? null : col.key); }}
                           title="What automations run in this stage, and what moves where"
                           className={`grid h-4 w-4 cursor-pointer place-items-center rounded-full text-[9px] font-extrabold ring-1 transition ${open ? "bg-indigo-600 text-white ring-indigo-600" : "bg-white/80 text-slate-400 ring-slate-200 hover:text-indigo-600"}`}
                         >i</button>
+                        {/* 🅰 automation marker — green "A" means a drip/text sequence runs in this stage */}
+                        {seq && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setHelpCol(open ? null : col.key); }}
+                            title={`Automated: ${seq.name} — click to see every message + day`}
+                            className={`grid h-4 w-4 cursor-pointer place-items-center rounded-full text-[9px] font-extrabold ring-1 transition ${open ? "bg-emerald-600 text-white ring-emerald-600" : "bg-emerald-50 text-emerald-700 ring-emerald-300 hover:bg-emerald-500 hover:text-white"}`}
+                          >A</button>
+                        )}
                         {open && (
                           <>
                             {/* click-away */}
                             <span className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setHelpCol(null); }} />
-                            <span className="absolute left-0 top-6 z-50 block max-h-[70vh] w-72 overflow-y-auto rounded-2xl bg-white p-3 text-left shadow-2xl ring-1 ring-slate-200">
+                            <span className="absolute left-0 top-6 z-50 block max-h-[75vh] w-80 overflow-y-auto rounded-2xl bg-white p-3 text-left shadow-2xl ring-1 ring-slate-200">
                               <span className="mb-1 flex items-start justify-between gap-2">
                                 <span className="block text-[12px] font-extrabold text-slate-800">{h?.title ?? col.label}</span>
                                 <button onClick={(e) => { e.stopPropagation(); setHelpCol(null); }} className="shrink-0 text-[11px] font-bold text-slate-400 hover:text-slate-700">✕</button>
                               </span>
                               {h?.desc && <span className="block text-[10px] font-medium leading-snug text-slate-500">{h.desc}</span>}
-                              {(seq || (h?.autos?.length)) && (
-                                <span className="mt-2 block">
-                                  <span className="block text-[9px] font-extrabold uppercase tracking-wide text-indigo-500">🤖 Runs automatically here</span>
-                                  <span className="mt-0.5 block space-y-0.5">
-                                    {seq && <span className="block text-[10px] font-semibold leading-snug text-slate-700">📨 Sequence “{seq.name}” — {seq.autoSend ? "auto-sends texts" : "creates assist tasks for a rep"}.</span>}
-                                    {h?.autos?.map((a, i) => <span key={i} className="block text-[10px] font-medium leading-snug text-slate-700">{a}</span>)}
+                              {/* 🤖 automation status — a sequence, OR a clear "manual" note */}
+                              <span className="mt-2 block">
+                                <span className="block text-[9px] font-extrabold uppercase tracking-wide text-indigo-500">🤖 Runs automatically here</span>
+                                <span className="mt-0.5 block space-y-0.5">
+                                  {seq ? (
+                                    <span className="block text-[10px] font-semibold leading-snug text-slate-700">📨 “{seq.name}” — {seq.autoSend ? "texts send automatically" : "creates an assist task for a rep to send"}.</span>
+                                  ) : (
+                                    <span className="block rounded-lg bg-amber-50 px-2 py-1 text-[10px] font-semibold leading-snug text-amber-800 ring-1 ring-amber-200">🤚 No automated sequence in this stage — it's worked by hand. (Reply-pause, Dead-stop and quiet hours below still apply.)</span>
+                                  )}
+                                  {h?.autos?.map((a, i) => <span key={i} className="block text-[10px] font-medium leading-snug text-slate-700">{a}</span>)}
+                                </span>
+                              </span>
+                              {/* 💬 the EXACT messages the lead will receive, with the day each one sends */}
+                              {seq?.steps?.length ? (
+                                <span className="mt-2 block rounded-xl bg-slate-50 p-2">
+                                  <span className="block text-[9px] font-extrabold uppercase tracking-wide text-slate-500">💬 Messages they’ll get ({seq.steps.length})</span>
+                                  <span className="mt-1 block space-y-1.5">
+                                    {seq.steps.map((st, i) => (
+                                      <span key={i} className="block border-l-2 border-slate-200 pl-2">
+                                        <span className="mb-0.5 flex items-center gap-1">
+                                          <span className="rounded bg-slate-200 px-1 py-0.5 text-[8px] font-extrabold text-slate-600">DAY {st.delayDays}</span>
+                                          <span className={`rounded px-1 py-0.5 text-[8px] font-extrabold uppercase ${chStyle(st.channel)}`}>{st.channel === "email" ? "✉️ Email" : "📱 Text"}</span>
+                                          {st.book && <span className="rounded bg-emerald-100 px-1 py-0.5 text-[8px] font-extrabold text-emerald-700">📅 asks to book</span>}
+                                        </span>
+                                        {st.channel === "email"
+                                          ? <span className="block text-[10px] leading-snug text-slate-700"><span className="font-bold">Subject: </span>{prettyMsg(st.emailSubject ?? "")}<br /><span className="text-slate-500">{prettyMsg(st.emailBody ?? "")}</span></span>
+                                          : <span className="block text-[10px] leading-snug text-slate-700">{prettyMsg(st.sms ?? "")}</span>}
+                                      </span>
+                                    ))}
                                   </span>
                                 </span>
-                              )}
+                              ) : null}
                               {h?.moves?.length ? (
                                 <span className="mt-2 block">
                                   <span className="block text-[9px] font-extrabold uppercase tracking-wide text-emerald-600">➡️ Moves to</span>
