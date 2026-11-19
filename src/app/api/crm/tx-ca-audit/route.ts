@@ -89,6 +89,7 @@ const digits = (s: string) => (s || "").replace(/\D/g, "");
 
 type Row = {
   id: string;
+  contactId: string;
   title: string;
   stage: string;
   pipeline: string;
@@ -108,6 +109,7 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const commit = url.searchParams.get("commit") === "1";
   const includeUnknown = url.searchParams.get("includeUnknown") === "1"; // also archive name-only (no state) leads
+  const deleteAddressless = url.searchParams.get("deleteAddressless") === "1"; // PERMANENTLY delete leads with no address anywhere
   const sampleN = Math.min(Number(url.searchParams.get("samples") ?? 8) || 8, 40);
 
   // The "New" column is the stage `new_call_1_min` ("New (Call <5 min)") for both reps'
@@ -125,7 +127,7 @@ export async function GET(req: NextRequest) {
       ],
     },
     select: {
-      id: true, title: true, stage: true, pipeline: true, tags: true, formData: true, assignedTo: true,
+      id: true, contactId: true, title: true, stage: true, pipeline: true, tags: true, formData: true, assignedTo: true,
       contact: {
         select: {
           name: true, phone: true, altPhone: true, email: true, altEmail: true,
@@ -142,8 +144,9 @@ export async function GET(req: NextRequest) {
   };
 
   type Assessed = {
-    id: string; rep: string; name: string; address: string; state: string; basis: string;
-    reachable: boolean; signals: string[]; decision: "KEEP" | "DROP-TX" | "DROP-WEAK-CA" | "DROP-OTHER" | "REVIEW-UNKNOWN";
+    id: string; contactId: string; rep: string; name: string; address: string; pinnedNote: string;
+    state: string; basis: string; reachable: boolean; signals: string[];
+    decision: "KEEP" | "DROP-TX" | "DROP-WEAK-CA" | "DROP-OTHER" | "REVIEW-UNKNOWN" | "DELETE-ADDRESSLESS";
   };
   const assessed: Assessed[] = [];
   const matchedNames: Record<string, Set<string>> = {};
@@ -172,9 +175,47 @@ export async function GET(req: NextRequest) {
     else decision = "DROP-OTHER"; // any other named state, or "?other" ZIP outside CA
 
     assessed.push({
-      id: o.id, rep, name: o.contact?.name || "", address: addr, state: state || "?", basis,
+      id: o.id, contactId: o.contactId, rep, name: o.contact?.name || "", address: addr,
+      pinnedNote: o.contact?.pinnedNote || "", state: state || "?", basis,
       reachable, signals, decision,
     });
+  }
+
+  // 📝 Notes pass: for leads still unknown after the address + ZIP/city passes, look for an
+  // address inside their NOTES (pinnedNote + CrmEvent note/system bodies). A lead with an
+  // address in a note gets resolved (CA keep / other archive / review); a lead with NO address
+  // ANYWHERE becomes a DELETE-ADDRESSLESS candidate (Jon 2026-11-18: "if no address in the
+  // notes either, delete these unknown leads").
+  const stillUnknownRows = assessed.filter((a) => a.decision === "REVIEW-UNKNOWN");
+  if (stillUnknownRows.length) {
+    const unkOppIds = stillUnknownRows.map((a) => a.id);
+    const unkContactIds = [...new Set(stillUnknownRows.map((a) => a.contactId))];
+    const noteRows = await db.crmEvent.findMany({
+      where: { kind: { in: ["note", "system", "call", "sms", "email", "task", "appt"] }, OR: [{ oppId: { in: unkOppIds } }, { contactId: { in: unkContactIds } }] },
+      select: { oppId: true, contactId: true, body: true },
+    }).catch(() => [] as { oppId: string; contactId: string; body: string }[]);
+    const byOpp: Record<string, string[]> = {};
+    const byContact: Record<string, string[]> = {};
+    for (const n of noteRows) {
+      const b = (n.body || "").replace(/<[^>]+>/g, " ");
+      if (n.oppId) (byOpp[n.oppId] ??= []).push(b);
+      if (n.contactId) (byContact[n.contactId] ??= []).push(b);
+    }
+    // An "address" = a street line (number + word) or a 5-digit ZIP somewhere in the text.
+    const hasStreetOrZip = (s: string) => /\b\d{1,6}\s+[A-Za-z]/.test(s) || /\b\d{5}\b/.test(s);
+    for (const a of stillUnknownRows) {
+      const noteHay = [a.pinnedNote, ...(byOpp[a.id] || []), ...(byContact[a.contactId] || [])].join("  ");
+      let st = stateOf(noteHay);
+      if (!st) st = resolveUnknown(noteHay).state; // "" | "CA" | "TX" | other | "?other"
+      // also consider the original address text for the "has any address at all" test
+      const anyAddr = hasStreetOrZip(`${a.address} ${noteHay}`);
+      if (st === "CA") { a.decision = "KEEP"; a.state = "CA"; a.basis = "note"; }
+      else if (st === "TX") { a.decision = "DROP-TX"; a.state = "TX"; a.basis = "note"; }
+      else if (st && st !== "?other") { a.decision = "DROP-OTHER"; a.state = st; a.basis = "note"; }
+      else if (st === "?other") { a.decision = "DROP-OTHER"; a.state = "?"; a.basis = "note"; }
+      else if (anyAddr) { a.decision = "REVIEW-UNKNOWN"; } // has an address but no derivable state — keep for review
+      else { a.decision = "DELETE-ADDRESSLESS"; } // no address in title, contact.address, OR notes
+    }
   }
 
   // 🔎 Diagnostics over ALL active opps for these reps (not just New stage) so we can
@@ -246,9 +287,18 @@ export async function GET(req: NextRequest) {
     committed = { archived: res.count };
   }
 
-  // 🔁 How the previously-"unknown" leads (no state abbreviation) were resolved by the
-  // ZIP/city second pass — so Jon can review before these get archived.
-  const resolved = assessed.filter((a) => a.basis === "city" || a.basis.startsWith("ZIP"));
+  // 🗑 PERMANENT delete of addressless leads (no address in title, contact.address, OR notes).
+  const addressless = assessed.filter((a) => a.decision === "DELETE-ADDRESSLESS");
+  const addresslessIds = addressless.map((a) => a.id);
+  let deleted: null | { deletedOpps: number; deletedEvents: number } = null;
+  if (deleteAddressless && addresslessIds.length) {
+    const ev = await db.crmEvent.deleteMany({ where: { oppId: { in: addresslessIds } } }).catch(() => ({ count: 0 }));
+    const op = await db.crmOpportunity.deleteMany({ where: { id: { in: addresslessIds } } });
+    deleted = { deletedOpps: op.count, deletedEvents: ev.count };
+  }
+
+  // 🔁 How the previously-"unknown" leads were resolved (ZIP/city pass + notes pass).
+  const resolved = assessed.filter((a) => ["city", "note"].includes(a.basis) || a.basis.startsWith("ZIP"));
   const stillUnknown = assessed.filter((a) => a.decision === "REVIEW-UNKNOWN");
   const unknownResolution = {
     resolvedToCA: {
@@ -259,9 +309,14 @@ export async function GET(req: NextRequest) {
       count: resolved.filter((a) => a.state !== "CA").length,
       leads: resolved.filter((a) => a.state !== "CA").map((a) => ({ rep: a.rep, name: a.name, address: a.address, state: a.state, via: a.basis })),
     },
-    stillUnknown: {
+    hasAddressNoState: {
       count: stillUnknown.length,
       leads: stillUnknown.map((a) => ({ rep: a.rep, name: a.name, address: a.address })),
+    },
+    addresslessToDelete: {
+      count: addressless.length,
+      note: deleteAddressless ? "DELETED (permanent)" : "candidates — add ?deleteAddressless=1 to PERMANENTLY delete",
+      leads: addressless.map((a) => ({ rep: a.rep, name: a.name, address: a.address || "(empty)" })),
     },
   };
 
@@ -284,5 +339,6 @@ export async function GET(req: NextRequest) {
     totalCaKeptAcrossBothReps: assessed.filter((a) => a.decision === "KEEP").length,
     unknownResolution,
     committed,
+    deleted,
   });
 }
