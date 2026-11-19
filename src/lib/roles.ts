@@ -47,6 +47,7 @@ export function positionLabel(key: string): string {
 // "not doing dispositions anymore"; no secondary.)
 export const SECONDARY_POSITION: Record<string, string> = {
   sharyn: "acquisitions",
+  marie: "acquisitions", // Jon 2026-11-19: "add Marie to acquisitions as well for KPIs" (primary stays Dispositions)
 };
 
 /** The rep's cross-trained secondary scorecard, or null. Never equals their primary. */
