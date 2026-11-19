@@ -143,6 +143,37 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  // 🔎 Diagnostics over ALL active opps for these reps (not just New stage) so we can
+  // see where Nick's leads are and what signals actually exist on the CA leads.
+  const repOf = (a: string) => whichRep(a);
+  const diag = ["Nick Fair", "Kyle"].map((rep) => {
+    const mineAll = rows.filter((o) => repOf(o.assignedTo) === rep);
+    const stageCounts: Record<string, number> = {};
+    const pipeCounts: Record<string, number> = {};
+    for (const o of mineAll) {
+      stageCounts[o.stage || "(blank)"] = (stageCounts[o.stage || "(blank)"] ?? 0) + 1;
+      pipeCounts[o.pipeline || "(native)"] = (pipeCounts[o.pipeline || "(native)"] ?? 0) + 1;
+    }
+    // CA new-stage leads: what's actually populated?
+    const caNew = mineAll.filter((o) => isNewStage(o) && stateOf(`${o.title || ""} ${o.contact?.address || ""}`) === "CA");
+    const hasPhone = caNew.filter((o) => digits(o.contact?.phone).length >= 10 || digits(o.contact?.altPhone).length >= 10).length;
+    const hasEmail = caNew.filter((o) => /@/.test(o.contact?.email || "") || /@/.test(o.contact?.altEmail || "")).length;
+    const hasTags = caNew.filter((o) => (o.tags || o.contact?.tags || "").trim().length > 0).length;
+    const hasForm = caNew.filter((o) => o.formData && JSON.stringify(o.formData) !== "{}" && JSON.stringify(o.formData) !== "null").length;
+    const srcCounts: Record<string, number> = {};
+    for (const o of caNew) srcCounts[(o.contact?.source || "(none)").slice(0, 30)] = (srcCounts[(o.contact?.source || "(none)").slice(0, 30)] ?? 0) + 1;
+    return {
+      rep,
+      activeOppsTotal: mineAll.length,
+      distinctAssignedTo: [...new Set(mineAll.map((o) => o.assignedTo || "(blank)"))],
+      stageCounts, pipeCounts,
+      caNewLeads: caNew.length,
+      caReachable: caNew.filter((o) => digits(o.contact?.phone).length >= 10 || digits(o.contact?.altPhone).length >= 10 || /@/.test(o.contact?.email || "") || /@/.test(o.contact?.altEmail || "")).length,
+      caHasPhone: hasPhone, caHasEmail: hasEmail, caHasTags: hasTags, caHasFormData: hasForm,
+      caSourceBreakdown: srcCounts,
+    };
+  });
+
   // Build per-rep + overall summary.
   const reps = Object.keys(REP_TOKENS).map((rep) => {
     const mine = assessed.filter((a) => a.rep === rep);
@@ -185,6 +216,7 @@ export async function GET(req: NextRequest) {
     ok: true,
     mode: commit ? "COMMITTED" : "DRY-RUN (read-only — add ?commit=1 to archive)",
     strict,
+    diag,
     reps,
     plan: {
       willArchive: archiveIds.length,
