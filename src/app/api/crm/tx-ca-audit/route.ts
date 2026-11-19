@@ -17,7 +17,8 @@ export const dynamic = "force-dynamic";
 // Admin-only (sign in as Jon). Archiving = setting archivedAt; restoreLead() in
 // crm/actions.ts puts them back on the board's first stage if ever needed.
 
-const REP_TOKENS: Record<string, string[]> = { "Nick Fair": ["nick"], Kyle: ["kyle"] };
+// assignedTo is stored as "Nicholas Fair" / "Kyle Brown" — match on first-name prefixes.
+const REP_TOKENS: Record<string, string[]> = { "Nick Fair": ["nick", "nicholas", "nic"], "Kyle Brown": ["kyle"] };
 
 const US_STATES = new Set([
   "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
@@ -77,7 +78,7 @@ export async function GET(req: NextRequest) {
 
   const url = new URL(req.url);
   const commit = url.searchParams.get("commit") === "1";
-  const strict = url.searchParams.get("strict") === "1"; // also archive non-CA "other" states
+  const includeUnknown = url.searchParams.get("includeUnknown") === "1"; // also archive name-only (no state) leads
   const sampleN = Math.min(Number(url.searchParams.get("samples") ?? 8) || 8, 40);
 
   // First stage key per pipeline → defines each rep's "New" column.
@@ -92,7 +93,7 @@ export async function GET(req: NextRequest) {
     where: {
       archivedAt: null,
       OR: [
-        { assignedTo: { startsWith: "nick", mode: "insensitive" } },
+        { assignedTo: { startsWith: "nic", mode: "insensitive" } },
         { assignedTo: { startsWith: "kyle", mode: "insensitive" } },
       ],
     },
@@ -131,9 +132,13 @@ export async function GET(req: NextRequest) {
     const signals = motivationHits(hay);
     const reachable = digits(o.contact?.phone) .length >= 10 || digits(o.contact?.altPhone).length >= 10 || /@/.test(o.contact?.email || "") || /@/.test(o.contact?.altEmail || "");
 
+    // Rule (Jon 2026-11-18): "just show CA leads." Keep every CA lead; archive TX and
+    // every other known state; name-only leads with no detectable state are left for review
+    // (could be CA) unless &includeUnknown=1. Motivation signals don't exist in this raw
+    // GHL-imported data, so there is no "weak CA" bucket — all CA stays.
     let decision: Assessed["decision"];
-    if (state === "TX") decision = "DROP-TX";
-    else if (state === "CA") decision = reachable && signals.length > 0 ? "KEEP" : "DROP-WEAK-CA";
+    if (state === "CA") decision = "KEEP";
+    else if (state === "TX") decision = "DROP-TX";
     else if (state === "") decision = "REVIEW-UNKNOWN";
     else decision = "DROP-OTHER";
 
@@ -146,7 +151,7 @@ export async function GET(req: NextRequest) {
   // 🔎 Diagnostics over ALL active opps for these reps (not just New stage) so we can
   // see where Nick's leads are and what signals actually exist on the CA leads.
   const repOf = (a: string) => whichRep(a);
-  const diag = ["Nick Fair", "Kyle"].map((rep) => {
+  const diag = ["Nick Fair", "Kyle Brown"].map((rep) => {
     const mineAll = rows.filter((o) => repOf(o.assignedTo) === rep);
     const stageCounts: Record<string, number> = {};
     const pipeCounts: Record<string, number> = {};
@@ -201,9 +206,9 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  // What commit WOULD archive.
+  // What commit WOULD archive: TX + all other known non-CA states; unknown only if asked.
   const toArchive = assessed.filter((a) =>
-    a.decision === "DROP-TX" || a.decision === "DROP-WEAK-CA" || (strict && a.decision === "DROP-OTHER"));
+    a.decision === "DROP-TX" || a.decision === "DROP-OTHER" || (includeUnknown && a.decision === "REVIEW-UNKNOWN"));
   const archiveIds = toArchive.map((a) => a.id);
 
   let committed: null | { archived: number } = null;
@@ -219,14 +224,14 @@ export async function GET(req: NextRequest) {
     diag,
     reps,
     plan: {
+      rule: "Keep every CA lead; archive TX + all other states; leave name-only (unknown) leads for review.",
       willArchive: archiveIds.length,
       breakdown: {
         TX: assessed.filter((a) => a.decision === "DROP-TX").length,
-        weakCA: assessed.filter((a) => a.decision === "DROP-WEAK-CA").length,
         otherStates: assessed.filter((a) => a.decision === "DROP-OTHER").length,
-        otherStatesNote: strict ? "archived (strict mode)" : "NOT archived unless &strict=1",
+        unknownNameOnly: assessed.filter((a) => a.decision === "REVIEW-UNKNOWN").length,
+        unknownNote: includeUnknown ? "ARCHIVED (includeUnknown=1)" : "NOT archived unless &includeUnknown=1",
       },
-      unknownLeftForReview: assessed.filter((a) => a.decision === "REVIEW-UNKNOWN").length,
     },
     totalCaKeptAcrossBothReps: assessed.filter((a) => a.decision === "KEEP").length,
     committed,
