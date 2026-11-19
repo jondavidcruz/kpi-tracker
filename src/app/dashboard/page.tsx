@@ -20,7 +20,7 @@ import { addrMatch } from "@/lib/underwrite-history";
 import { findPipCandidates } from "@/lib/pip";
 import { getDailyTrends } from "@/lib/trends";
 import { getAwardBoard, getAiChampions } from "@/lib/awards";
-import { POSITIONS } from "@/lib/roles";
+import { POSITIONS, secondaryPositionOf } from "@/lib/roles";
 import { KpiLabel } from "@/lib/kpiIcons";
 import RecognitionBoards from "@/components/RecognitionBoards";
 import OnboardingProgressCard from "@/components/OnboardingProgressCard";
@@ -216,7 +216,7 @@ export default async function DashboardPage({
   let onGoal = 0;
   const internetKpis = perRepKpis.filter((k) => k.roleKey === "internet");
   for (const pos of POSITIONS) {
-    const roleReps = reps.filter((r) => r.position === pos.key);
+    const roleReps = reps.filter((r) => r.position === pos.key || secondaryPositionOf(r) === pos.key);
     const roleKpis = perRepKpis.filter((k) => k.roleKey === pos.key);
     for (const rep of roleReps) {
       // each rep sees their role KPIs + internet KPI if they track it

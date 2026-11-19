@@ -10,7 +10,7 @@ import {
 } from "@/lib/data";
 import { todayStr, lastWeekRange, currentWeekRange, datesInRange, monthBounds, monthOf } from "@/lib/date";
 import { formatValue, type Unit } from "@/lib/format";
-import { POSITIONS } from "@/lib/roles";
+import { POSITIONS, secondaryPositionOf } from "@/lib/roles";
 import { KpiLabel } from "@/lib/kpiIcons";
 import { getCurrentUser, isManager } from "@/lib/auth";
 import { workdaysFor } from "@/lib/shift";
@@ -254,7 +254,7 @@ export default async function ReportPage({
         <SectionTitle title="② Team KPIs" subtitle={`Every rep's ${rangeNoun} totals by role`} accent="bg-sky-400" />
         <div className="space-y-5">
           {POSITIONS.map((pos) => {
-            const roleReps = reps.filter((r) => r.position === pos.key);
+            const roleReps = reps.filter((r) => r.position === pos.key || secondaryPositionOf(r) === pos.key);
             const roleKpis = perRepKpis.filter((k) => k.roleKey === pos.key);
             if (roleReps.length === 0) return null;
             const dreiSide = drei && pos.key === "acquisitions" ? drei.seller : drei && pos.key === "dispositions" ? drei.buyer : null;

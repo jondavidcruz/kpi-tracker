@@ -33,7 +33,7 @@ export const maxDuration = 60;
 export default async function EntryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ user?: string; date?: string; saved?: string; err?: string }>;
+  searchParams: Promise<{ user?: string; date?: string; saved?: string; err?: string; lane?: string }>;
 }) {
   const sp = await searchParams;
   const settings = await getSettings();
@@ -74,6 +74,13 @@ export default async function EntryPage({
     getAllTargets(),
   ]);
 
+  // 🔁 Hybrid reps (Marie, Sharyn) get their secondary scorecard as its own TAB
+  // (Jon 2026-11-19: "make Marie's acquisition KPIs a separate tab"). `lane`
+  // picks which scorecard this screen shows; the secondary is still optional
+  // (never nags) — it's just no longer scrolled together with the primary.
+  const lane: "primary" | "secondary" = secRole && sp.lane === "secondary" ? "secondary" : "primary";
+  const activeKpis = lane === "secondary" ? secRoleKpis : roleKpis;
+
   // Saved notes for note-bearing KPIs (e.g. Signed Contract type)
   const noteRows = await db.entry.findMany({ where: { date, note: { not: "" } }, select: { kpiId: true, userId: true, note: true } });
   const notes = new Map(noteRows.map((n) => [`${n.kpiId}|${n.userId ?? ""}`, n.note] as const));
@@ -113,7 +120,8 @@ export default async function EntryPage({
   const commPlan = rep ? planForUser(await readCommissionPlans(), rep.name) : null;
 
   // Simple, everyday KPI entry — they just enter the day's numbers (Jon 2026-10-21).
-  let shown = roleKpis.filter((k) => !HIDE_FROM_ENTRY.has(k.key));
+  // `activeKpis` = the lane's scorecard (primary, or the hybrid's secondary tab).
+  let shown = activeKpis.filter((k) => !HIDE_FROM_ENTRY.has(k.key));
 
   // Per-rep channel swap: Marie enters Facebook (not Instagram); Sharyn the reverse.
   if (rep) {
@@ -163,17 +171,9 @@ export default async function EntryPage({
   if (rep) {
     if (moneyKpis.length > 0) groups.push({ title: "💰 Money — results", hint: "The outcomes that move revenue.", items: moneyKpis.map(toItem) });
     if (activityKpis.length > 0) groups.push({ title: "📊 Activity", hint: "Your daily effort.", items: activityKpis.map(toItem) });
-    if (secRole && secRoleKpis.length > 0) {
-      const secItems = secRoleKpis.filter((k) => !isKpiHiddenForRep(rep.name, k.key)).map(toItem);
-      if (secItems.length > 0) groups.push({
-        title: `🔁 ${positionLabel(secRole)} — secondary role (optional)`,
-        hint: "You're cross-trained here. Log anything you did in this lane today — it counts on the scorecards, but skipping it never flags you.",
-        items: secItems,
-      });
-    }
   }
-  // Lead sources only appear on Marie's card; Text Responses is removed (auto-synced).
-  const leadSourceItems = selectedId === marieId ? teamDaily.filter((k) => k.key !== "text_responses") : [];
+  // Lead sources only appear on Marie's PRIMARY (Dispositions) card; Text Responses is auto-synced.
+  const leadSourceItems = selectedId === marieId && lane === "primary" ? teamDaily.filter((k) => k.key !== "text_responses") : [];
   if (leadSourceItems.length > 0) {
     groups.push({
       title: "Lead sources",
@@ -247,8 +247,31 @@ export default async function EntryPage({
         })}
       </div>
 
+      {secRole && (
+        <div className="flex flex-wrap gap-2">
+          {([
+            { key: "primary", label: positionLabel(rep.position), icon: "" },
+            { key: "secondary", label: positionLabel(secRole), icon: "🔁 " },
+          ] as const).map((t) => {
+            const on = lane === t.key;
+            return (
+              <Link
+                key={t.key}
+                href={`/entry?user=${selectedId}&lane=${t.key}${sp.date ? `&date=${sp.date}` : ""}`}
+                className={`rounded-lg px-3.5 py-1.5 text-sm font-bold border ${
+                  on ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                }`}
+              >
+                {t.icon}{t.label}{t.key === "secondary" ? <span className={`ml-1 text-xs font-medium ${on ? "text-indigo-200" : "text-slate-400"}`}>optional</span> : ""}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+
       <form className="flex items-center gap-2 text-sm" action="/entry" method="get">
         {selectedId && <input type="hidden" name="user" value={selectedId} />}
+        {secRole && <input type="hidden" name="lane" value={lane} />}
         <label className="text-slate-500">Date</label>
         <input
           type="date"
