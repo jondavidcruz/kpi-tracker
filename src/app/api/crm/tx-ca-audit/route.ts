@@ -220,7 +220,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     mode: commit ? "COMMITTED" : "DRY-RUN (read-only — add ?commit=1 to archive)",
-    strict,
+    includeUnknown,
     diag,
     reps,
     plan: {
