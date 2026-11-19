@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
-import { readPipelines } from "@/lib/crm";
 
 export const dynamic = "force-dynamic";
 
@@ -81,13 +80,11 @@ export async function GET(req: NextRequest) {
   const includeUnknown = url.searchParams.get("includeUnknown") === "1"; // also archive name-only (no state) leads
   const sampleN = Math.min(Number(url.searchParams.get("samples") ?? 8) || 8, 40);
 
-  // First stage key per pipeline → defines each rep's "New" column.
-  const pipes = await readPipelines().catch(() => []);
-  const firstKeyByPipe = new Map<string, string>(pipes.map((p) => [p.name, p.stages[0]?.key ?? "new"]));
-  const isNewStage = (o: { pipeline: string; stage: string }) => {
-    const fk = firstKeyByPipe.get(o.pipeline || "War Room") ?? "new";
-    return o.stage === fk || o.stage === "new" || /(^|_)new($|_)|new\s*lead/i.test(o.stage);
-  };
+  // The "New" column is the stage `new_call_1_min` ("New (Call <5 min)") for both reps'
+  // pipelines; native board uses "new". Restrict STRICTLY to these so leads in other
+  // pipelines/stages (Cold, Dead, DNC, Nurture…) are never touched — Jon asked about the
+  // New column only.
+  const isNewStage = (o: { pipeline: string; stage: string }) => o.stage === "new_call_1_min" || o.stage === "new";
 
   const rows = (await db.crmOpportunity.findMany({
     where: {
