@@ -39,6 +39,36 @@ function stateOf(raw: string): string {
   return "";
 }
 
+// 🔁 Second-pass resolver for "unknown" leads (no state abbreviation in the address).
+// Uses a 5-digit ZIP (deterministic by numeric range) first, then a conservative
+// city lookup. Returns { state, basis } or { "", "none" } when still unresolvable.
+function zipToState(zip: string): string {
+  const n = Number(zip);
+  if (!n) return "";
+  if (n >= 90001 && n <= 96162) return "CA";
+  const ranges: Array<[number, number, string]> = [
+    [85001, 86556, "AZ"], [88901, 89883, "NV"], [73001, 74966, "OK"], [75001, 79999, "TX"],
+    [32003, 34997, "FL"], [35004, 36925, "AL"], [37010, 38589, "TN"], [70001, 71497, "LA"],
+    [97001, 97920, "OR"], [98001, 99403, "WA"], [80001, 81658, "CO"], [87001, 88441, "NM"],
+    [84001, 84784, "UT"], [83201, 83877, "ID"], [59001, 59937, "MT"], [96701, 96898, "HI"],
+    [10001, 14925, "NY"], [60001, 62999, "IL"], [48001, 49971, "MI"], [43001, 45999, "OH"],
+  ];
+  for (const [a, b, s] of ranges) if (n >= a && n <= b) return s;
+  return "?other"; // a real US ZIP, but outside the ranges we name — definitely not CA
+}
+const CITY_STATE: Array<[RegExp, string]> = [
+  [/\blas vegas\b|\bhenderson\b|\breno\b|\bsparks\b|\bcarson city\b|\bnorth las vegas\b/i, "NV"],
+  [/\boklahoma city\b|\btulsa\b|\bnorman\b|\bedmond\b|\bbroken arrow\b/i, "OK"],
+  [/\bphoenix\b|\btucson\b|\bmesa\b|\bscottsdale\b|\bchandler\b|\bglendale az\b/i, "AZ"],
+  [/\bdowney\b|\blos angeles\b|\bsan diego\b|\bsacramento\b|\bfresno\b|\bsan jose\b|\blancaster\b|\bpalmdale\b|\briverside\b|\bbakersfield\b|\blong beach\b|\banaheim\b|\bstockton\b|\bmodesto\b|\bchula vista\b|\bsanta ana\b|\bmoreno valley\b|\bvictorville\b|\bhemet\b|\bmurrieta\b|\btemecula\b|\boakland\b|\bfontana\b|\birvine\b|\bsan bernardino\b|\bpomona\b|\bescondido\b|\bel cajon\b|\bcompton\b|\binglewood\b|\bvallejo\b|\bcarson\b|\bhesperia\b/i, "CA"],
+];
+function resolveUnknown(addr: string): { state: string; basis: string } {
+  const zips = addr.match(/\b(\d{5})\b/g) || [];
+  for (const z of zips) { const s = zipToState(z); if (s) return { state: s, basis: `ZIP ${z}` }; }
+  for (const [re, s] of CITY_STATE) if (re.test(addr)) return { state: s, basis: "city" };
+  return { state: "", basis: "none" };
+}
+
 // Motivation signal categories (the "most likely to sell" ranking Jon chose:
 // high equity + absentee, distress flags, reachable).
 const SIGNAL_CATS: Array<[string, RegExp]> = [
@@ -112,7 +142,7 @@ export async function GET(req: NextRequest) {
   };
 
   type Assessed = {
-    id: string; rep: string; name: string; address: string; state: string;
+    id: string; rep: string; name: string; address: string; state: string; basis: string;
     reachable: boolean; signals: string[]; decision: "KEEP" | "DROP-TX" | "DROP-WEAK-CA" | "DROP-OTHER" | "REVIEW-UNKNOWN";
   };
   const assessed: Assessed[] = [];
@@ -124,23 +154,25 @@ export async function GET(req: NextRequest) {
     (matchedNames[rep] ??= new Set()).add(o.assignedTo || "(blank)");
 
     const addr = `${o.title || ""} ${o.contact?.address || ""}`.trim();
-    const state = stateOf(addr);
+    let state = stateOf(addr);
+    let basis = state ? "address" : "";
+    // Second pass for leads with no state in the address: ZIP/city → state.
+    if (!state) { const r = resolveUnknown(addr); state = r.state; basis = r.basis; }
     const hay = [o.tags, o.contact?.tags, o.contact?.source, o.contact?.pinnedNote, o.title, JSON.stringify(o.formData ?? {})].join(" ");
     const signals = motivationHits(hay);
     const reachable = digits(o.contact?.phone) .length >= 10 || digits(o.contact?.altPhone).length >= 10 || /@/.test(o.contact?.email || "") || /@/.test(o.contact?.altEmail || "");
 
     // Rule (Jon 2026-11-18): "just show CA leads." Keep every CA lead; archive TX and
-    // every other known state; name-only leads with no detectable state are left for review
-    // (could be CA) unless &includeUnknown=1. Motivation signals don't exist in this raw
-    // GHL-imported data, so there is no "weak CA" bucket — all CA stays.
+    // every other known state; only leads still unresolvable after the ZIP/city pass are
+    // left for review (&includeUnknown=1 to archive those too).
     let decision: Assessed["decision"];
     if (state === "CA") decision = "KEEP";
     else if (state === "TX") decision = "DROP-TX";
     else if (state === "") decision = "REVIEW-UNKNOWN";
-    else decision = "DROP-OTHER";
+    else decision = "DROP-OTHER"; // any other named state, or "?other" ZIP outside CA
 
     assessed.push({
-      id: o.id, rep, name: o.contact?.name || "", address: addr, state: state || "?",
+      id: o.id, rep, name: o.contact?.name || "", address: addr, state: state || "?", basis,
       reachable, signals, decision,
     });
   }
@@ -214,6 +246,25 @@ export async function GET(req: NextRequest) {
     committed = { archived: res.count };
   }
 
+  // 🔁 How the previously-"unknown" leads (no state abbreviation) were resolved by the
+  // ZIP/city second pass — so Jon can review before these get archived.
+  const resolved = assessed.filter((a) => a.basis === "city" || a.basis.startsWith("ZIP"));
+  const stillUnknown = assessed.filter((a) => a.decision === "REVIEW-UNKNOWN");
+  const unknownResolution = {
+    resolvedToCA: {
+      count: resolved.filter((a) => a.state === "CA").length,
+      leads: resolved.filter((a) => a.state === "CA").map((a) => ({ rep: a.rep, name: a.name, address: a.address, via: a.basis })),
+    },
+    resolvedToOtherState: {
+      count: resolved.filter((a) => a.state !== "CA").length,
+      leads: resolved.filter((a) => a.state !== "CA").map((a) => ({ rep: a.rep, name: a.name, address: a.address, state: a.state, via: a.basis })),
+    },
+    stillUnknown: {
+      count: stillUnknown.length,
+      leads: stillUnknown.map((a) => ({ rep: a.rep, name: a.name, address: a.address })),
+    },
+  };
+
   return NextResponse.json({
     ok: true,
     mode: commit ? "COMMITTED" : "DRY-RUN (read-only — add ?commit=1 to archive)",
@@ -231,6 +282,7 @@ export async function GET(req: NextRequest) {
       },
     },
     totalCaKeptAcrossBothReps: assessed.filter((a) => a.decision === "KEEP").length,
+    unknownResolution,
     committed,
   });
 }
