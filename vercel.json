@@ -237,10 +237,6 @@
       "schedule": "0 22 * * 1-5"
     },
     {
-      "path": "/api/cron?buyernightly=1",
-      "schedule": "0 10 * * *"
-    },
-    {
       "path": "/api/cron?devdrop=1&commit=1",
       "schedule": "0 17 * * 6"
     },
