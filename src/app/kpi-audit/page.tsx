@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCurrentUser, canAccessCSuite, isOwner } from "@/lib/auth";
+import { getCurrentUser, canAccessCSuite } from "@/lib/auth";
 import { getAllUsers } from "@/lib/data";
 import { Card, SectionTitle } from "@/components/ui";
 import { kpiProofsFor, type KpiProof } from "@/lib/kpi-receipts";
@@ -89,11 +89,9 @@ export default async function KpiAuditPage({ searchParams }: { searchParams: Pro
   const proofs = rep ? await kpiProofsFor(rep, range.from, range.to) : [];
   const flagged = proofs.filter((p) => p.status === "over_reported").length;
   // 🧮 Team-level carrier reconciliation (Telnyx sees BOTH Direct REI + War Room; the per-rep
-  // audit below only sees War Room CRM). Talk time is the honesty anchor. OWNER-ONLY (Jon):
-  // the whole-team carrier-spend view is his alone, even among C-suite.
-  const recon = isOwner(me)
-    ? await teamTelnyxReconciliation(range.from, range.to, users.map((u) => ({ id: u.id, name: u.name }))).catch(() => null)
-    : null;
+  // audit below only sees War Room CRM). Talk time is the honesty anchor. Visible to the whole
+  // C-suite (Jon, Viktoriia, Enrico) — same gate as the KPI verification it sits above.
+  const recon = await teamTelnyxReconciliation(range.from, range.to, users.map((u) => ({ id: u.id, name: u.name }))).catch(() => null);
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
