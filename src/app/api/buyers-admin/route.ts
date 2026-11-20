@@ -6,10 +6,12 @@
 //                     never overwrites source manual/interview)
 //   ?op=centroids&limit=25 → geocode a centroid for buyers with a buy box but no
 //                     centroid yet (Nominatim-throttled; rerun until remaining=0)
+//   ?op=duong_buyers → load Jonathan Duong's proven GGE builder/investor buyers
+//                     (from Collier deeds) into Vetted Buyers; idempotent, deduped
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
-import { setBuyBox, updateBuyer } from "@/lib/buyers/write";
+import { setBuyBox, updateBuyer, createBuyer } from "@/lib/buyers/write";
 import { emptyBuyBox, type BuyBox, type AssetType } from "@/lib/buybox/types";
 import { geocode } from "@/lib/geo/geocode";
 import type { BuyerLand } from "@/lib/buyer-land";
@@ -127,5 +129,56 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, op, done, misses, remaining: Math.max(0, todo.length - limit), details: details.slice(0, 10) });
   }
 
-  return NextResponse.json({ error: "unknown op — use interviews | backfill | centroids" }, { status: 400 });
+  if (op === "duong_buyers") {
+    // Jonathan Duong's (Upland Capital Group LLC) proven Golden Gate Estates land buyers,
+    // pulled from Collier County deeds (public record — names only, no PII). Loaded into
+    // Vetted Buyers, source-tagged. Idempotent: createBuyer dedupes (phone→email→name/
+    // company) and returns {dup}, so re-running is safe and tells us who we already had.
+    type Seed = { name: string; company?: string; type: string; vetStage: string; buyBox: string };
+    // 13 builder/investor LLCs → vetted (repeat cash buyers = the dispo channel):
+    const BUILDERS: Seed[] = [
+      { name: "Pals Builders LLC", company: "Pals Builders LLC", type: "developer", vetStage: "vetted", buyBox: "GGE Naples — bought Unit 47 Tr 8 (Jan 2026), Unit 62 Tr 23 (Apr 2025)" },
+      { name: "Construction 2018 Corp", company: "Construction 2018 Corp", type: "developer", vetStage: "vetted", buyBox: "GGE Naples — bought Unit 43 Tr 153 (Feb 2025), Unit 64 Tr 43 (Oct 2024)" },
+      { name: "Synergy Invest LLC", company: "Synergy Invest LLC", type: "investor", vetStage: "vetted", buyBox: "GGE Naples — bought Unit 77 Tr 100 (Jun 2025), Unit 64 Tr 58 (Mar 2025), Unit 40 Tr 63 (Sep 2024)" },
+      { name: "IRL Construction Inc", company: "IRL Construction Inc", type: "developer", vetStage: "vetted", buyBox: "GGE Naples — bought Unit 43 Tr 153 (Oct 2025)" },
+      { name: "Herrod Construction LLC", company: "Herrod Construction LLC", type: "developer", vetStage: "vetted", buyBox: "GGE Naples — bought Unit 81 Tr 16 (Jul 2024)" },
+      { name: "Above Homes Corporation", company: "Above Homes Corporation", type: "developer", vetStage: "vetted", buyBox: "GGE Naples — bought Unit 61 Tr 46 (May 2024)" },
+      { name: "Y&C Development Homes LLC", company: "Y&C Development Homes LLC", type: "developer", vetStage: "vetted", buyBox: "GGE Naples — bought Unit 81 Tr 17 (Dec 2023)" },
+      { name: "PHL Capital Inc", company: "PHL Capital Inc", type: "investor", vetStage: "vetted", buyBox: "GGE Naples — bought Unit 62 Tr 85 (Nov 2025)" },
+      { name: "Munguia Group LLC", company: "Munguia Group LLC", type: "investor", vetStage: "vetted", buyBox: "GGE Naples — bought Unit 86 Tr 44 (Jun 2026)" },
+      { name: "JC & MIL Consulting LLC", company: "JC & MIL Consulting LLC", type: "investor", vetStage: "vetted", buyBox: "GGE Naples — bought Unit 82 Tr 129 (Mar 2025)" },
+      { name: "Bernsen Enterprises LLC", company: "Bernsen Enterprises LLC", type: "investor", vetStage: "vetted", buyBox: "GGE Naples — bought Sec 30-49S-27E (Aug 2025)" },
+      { name: "HM Sunshine LLC", company: "HM Sunshine LLC", type: "investor", vetStage: "vetted", buyBox: "GGE Naples — bought Unit 64 Tr 98 (Jun 2024)" },
+      { name: "Como Ventures LLC", company: "Como Ventures LLC", type: "investor", vetStage: "vetted", buyBox: "GGE Naples — bought Unit 85 Tr 73 (Oct 2023)" },
+      { name: "iPermitting Services Corp", company: "iPermitting Services Corp", type: "developer", vetStage: "vetted", buyBox: "GGE Naples — bought Unit 83 Tr 123 (Sep 2026)" },
+    ];
+    // 6 individual end-buyers (self-build / one-off) → to_vet (in the system, not auto-cascaded):
+    const INDIVIDUALS: Seed[] = [
+      { name: "Carrillo Sarah Neli", type: "cash_buyer", vetStage: "to_vet", buyBox: "GGE Naples — bought Sec 23-47S-27E (Jul 2026)" },
+      { name: "Poulson Jessica Ashley", type: "cash_buyer", vetStage: "to_vet", buyBox: "GGE Naples — bought Sec 31-49S-27E (Dec 2025)" },
+      { name: "Ochoa Jonathan F Mejia", type: "cash_buyer", vetStage: "to_vet", buyBox: "GGE Naples — bought Unit 73 Tr 114 (Jul 2025)" },
+      { name: "Elliott Austin Michael & Liset", type: "cash_buyer", vetStage: "to_vet", buyBox: "GGE Naples — bought Unit 51 Tr 116 (Jun 2024)" },
+      { name: "Billie Corey & Michelle", type: "cash_buyer", vetStage: "to_vet", buyBox: "GGE Naples — bought Unit 84 Lot 6 (Dec 2024)" },
+      { name: "Pinero Robert", type: "cash_buyer", vetStage: "to_vet", buyBox: "GGE Naples — bought Unit 51 Tr 78 (Apr 2024)" },
+    ];
+    const all = [...BUILDERS, ...INDIVIDUALS];
+    const created: string[] = []; const existing: string[] = [];
+    for (const b of all) {
+      const res = await createBuyer(
+        {
+          name: b.name, company: b.company ?? "", type: b.type, category: "land",
+          companySize: "Mom & Pop", region: "FL", market: "Golden Gate Estates / Naples",
+          vetStage: b.vetStage, buyBox: b.buyBox, status: "Duong buyer",
+          notes: "Proven GGE land buyer from Jonathan Duong (Upland Capital Group LLC) Collier County closings. Contacts pending skip-trace — not in the deed index.",
+          source: "Duong closed-deal buyer",
+        },
+        actor,
+        { isLand: true, targetStates: ["FL"] },
+      );
+      if (res.created) created.push(b.name); else existing.push(`${b.name} (had: ${res.id})`);
+    }
+    return NextResponse.json({ ok: true, op, loaded: created.length, created, alreadyHad: existing.length, existing });
+  }
+
+  return NextResponse.json({ error: "unknown op — use interviews | backfill | centroids | duong_buyers" }, { status: 400 });
 }

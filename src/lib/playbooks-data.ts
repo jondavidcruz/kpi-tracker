@@ -493,4 +493,47 @@ export const PLAYBOOKS: Playbook[] = [
       { heading: "Non-disclosure states", body: "TX, NM, ID, UT, MT hide sold prices — Zillow sold counts are unreliable there. Judge by new-construction counts + direct builder calls instead." },
     ],
   },
+  {
+    key: "k_land_gge_naples", title: "Golden Gate Estates Land Play — Naples (Cruz × Duong JV)", emoji: "🌴", category: "Land Courses",
+    summary: "Our proprietary 50/50 land-wholesaling play with Jonathan Duong (Upland Capital Group LLC) in Golden Gate Estates, Naples (Collier — ZIPs 34117 + 34120). The edge: buildable UPLAND lots hide inside wetland-heavy, non-cookie-cutter acreage that mass investors avoid — so the market stays overlooked, low-saturation, and fat-spread. Cruz runs marketing/acquisitions; Duong prices + dispos to his proven builder buyers. NOT like Lehigh Acres (uniform grid = low spread = avoid).",
+    flow: [
+      { emoji: "🎯", label: "Pull GGE buy-box (34117/34120)" }, { emoji: "🛰️", label: "Wetland-screen → upland only" }, { emoji: "📣", label: "Market upland-first" },
+      { emoji: "🔎", label: "3-step DD + comps" }, { emoji: "💵", label: "Offer ≈ 50% of low comp" }, { emoji: "✍️", label: "Lock + double-close" }, { emoji: "🏢", label: "Sell to Duong's builders" },
+    ],
+    stats: [
+      { value: "~26%", label: "of raw GGE lots are buildable upland" }, { value: "~1,928", label: "buy-box leads in 34117+34120" },
+      { value: "~20", label: "proven GGE buyers from Duong's deeds" }, { value: "50%", label: "of low comp = our offer anchor" },
+    ],
+    sections: [
+      { heading: "🎯 The money model (one line)", body: "Find buildable upland lots hiding in wetland-heavy, non-cookie-cutter acreage that big investors skip → market upland-first → Duong prices and sells to his builder buyers → split 50/50. The whole edge is that most wholesalers can't tell upland from wetland, so they either avoid GGE or market swamp nobody can build on. We screen first, so we only ever market (and pay for) the lots that are actually worth something." },
+      { heading: "Who we pull (the buy-box)", bullets: [
+        "Location: Golden Gate Estates, Naples — Collier County, ZIPs 34117 + 34120 (whole estates, Units 40–86 + the section-range tracts, not one pocket).",
+        "Owner: absentee / out-of-state, INDIVIDUALS only (no LLCs), tax-delinquent is the hottest subset. Living trusts + probate/estate owners are the most motivated — worth a dedicated sub-pull.",
+        "Size: owners of 1–2 lots. 90-day cooldown before re-pulling non-responders.",
+        "Live universe (DealMachine, Nov 2026): ~11,421 total vacant-land parcels; ~1,928 match the full buy-box; ~1,667 are phone-reachable; ~86 are also tax-delinquent (work those first).",
+      ], tip: "Don't pull all 1,928 blind — at ~26% buildable-upland that's ~500 real targets. Pull → run the wetland screen → work the upland. The 86 tax-delinquent is the one list worth pulling in full immediately." },
+      { heading: "Step 1 — Wetland screen (market upland-first)", body: "Before any lot gets marketed, it goes through our wetland screen (free gov data: FL statewide parcels × USFWS National Wetlands Inventory). Each parcel scores BUILDABLE / MARGINAL / WETLAND. On our first 381-lot GGE pull: 98 buildable / 35 marginal / 248 wetland. We market the buildable + marginal first — that alone fixes the #1 problem from before (marketing swamp that sellers price like buildable land, so nobody says yes). Collier's official wetland determination + a survey are still the final check before we contract." },
+      { heading: "Step 2 — Duong's 3-step DD (run when a seller replies)", bullets: [
+        "Collier County Property Appraiser → the wetland determination list: look for the Uplands (buildable) vs Wetlands (cooked) label.",
+        "A wetlands mapper (USFWS NWI) to confirm — our screen does this automatically for the clear cases.",
+        "Zillow comps: last 6 months, same acreage, the 3 closest; read the descriptions for upland vs wetland. Water proximity is the multiplier (inland acre ~$100–120k vs near-water ~$300k).",
+      ] },
+      { heading: "Step 3 — Pricing + protect the spread", bullets: [
+        "Offer ≈ 50% of the low comp. Resell floor = low comp, ceiling = high comp (same acreage, upland, last 6 mo).",
+        "Protect the spread on dispo with a double-close / blind-HUD title so the buyer never sees our buy price (Duong's hard-learned $45k lesson).",
+        "New-market rule (Duong's): line up 2–3 builder/realtor buyers BEFORE marketing a new area hard, so a yes doesn't sit.",
+      ] },
+      { heading: "🏢 Our buyers (Duong's proven GGE builder list)", body: "Duong's own closings in GGE (Upland Capital Group LLC — 73 recorded deeds, 2023–2026) gave us ~20 real cash buyers, ~13 of them builder/investor LLCs (Pals Builders, Construction 2018, Synergy Invest, IRL Construction, Herrod, Above Homes, Y&C Development, PHL Capital, Munguia, JC & MIL, Bernsen, HM Sunshine, Como Ventures, iPermitting). These are loaded into Vetted Buyers, source-tagged \"Duong closed-deal buyer.\" They're the dispo side's hardest asset — proven to actually buy and build GGE land — pulled straight from public deeds." },
+      { heading: "The outreach cadence (Cruz side — marketing engine)", bullets: [
+        "Per buildable-upland lead: SMS day 0 → SMS day 2 (reworded) → VM drop day 4 → SMS day 5 → live call day 9 → takeaway SMS day 14 → re-pull at +90 days.",
+        "Get their price FIRST on the call — you instantly know retail (too high) vs workable. If no price: 'let me pull the recent comps and come back with a real number' — the discipline that kills the overpriced-seller problem.",
+        "Comp the lot BEFORE you offer, so the number is defensible and we stop chasing retail sellers.",
+      ] },
+      { heading: "⚠️ Guardrails (non-negotiable)", bullets: [
+        "Owner anonymity: NEVER put our name or 'Freedom Offers' in any sent SMS/email — neutral sender only.",
+        "No external outreach without Jon's explicit OK — drafts only until approved.",
+        "Quiet hours 9pm–8am by the owner's area code AND the lot location; every message carries an opt-out; stay under 10DLC daily limits.",
+      ] },
+    ],
+  },
 ];
