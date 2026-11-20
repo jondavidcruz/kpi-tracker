@@ -124,6 +124,11 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  if (sp.get("rt")) {
+    const one = await pull(key, sp.get("rt")!, sp.get("df") || "started_at", start, end);
+    return NextResponse.json({ ok: true, record_type: sp.get("rt"), window: { start, end, days }, ...one });
+  }
+
   if (sp.get("sample") === "1") {
     const [callUnderscore, callHyphen, messaging] = await Promise.all([
       pull(key, "call_control", "started_at", start, end),
