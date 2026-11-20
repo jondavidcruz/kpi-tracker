@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 
 const LINK_CAT = "__pull_campaign_links__";  // { [batchId]: "Direct REI campaign name" }
 const NOTES_CAT = "__pull_campaign_notes__"; // { [batchId]: Array<{ text, by, at }> }
+const VIP_CAT = "__pull_campaign_vip__";     // { [batchId]: true } — ⭐ VIP JV campaigns (Jon×Jon land JV, Nov 2026)
 
 export type CampaignNote = { text: string; by: string; at: string };
 
@@ -33,6 +34,18 @@ export async function setCampaignLink(batchId: string, campaign: string): Promis
   if (campaign && campaign.trim()) links[batchId] = campaign.trim().slice(0, 120);
   else delete links[batchId];
   await writeMap(LINK_CAT, "pull-campaign-links", links);
+}
+
+// ── ⭐ VIP flag — the JV campaigns (Jon × Jon land JV). Owner marks these so they stand out + sort first.
+export async function readCampaignVip(): Promise<Record<string, boolean>> {
+  return readMap<boolean>(VIP_CAT);
+}
+export async function setCampaignVip(batchId: string, vip: boolean): Promise<Record<string, boolean>> {
+  const all = await readCampaignVip();
+  if (vip) all[batchId] = true;
+  else delete all[batchId];
+  await writeMap(VIP_CAT, "pull-campaign-vip", all);
+  return all;
 }
 
 // ── Manual campaign notes / offers log ───────────────────────────────────────────────────────────

@@ -79,15 +79,17 @@ export default async function MarketsPage() {
   const campaignOffers: Record<string, Array<{ name: string; address: string; value: number; stage: string; at: string }>> = {};
   let campaignNotes: Record<string, Array<{ text: string; by: string; at: string }>> = {};
   let campaignLinks: Record<string, string> = {};
+  let campaignVip: Record<string, boolean> = {};
   let campaignOptions: string[] = [];
   let campaignHealthSyncedAt = "";
   try {
     const { readDreiFeed, normCampaignName } = await import("@/lib/directrei-sync");
-    const { readCampaignLinks, readCampaignNotes } = await import("@/lib/pull-campaign-meta");
-    const [feed, links, notes] = await Promise.all([readDreiFeed(), readCampaignLinks(), readCampaignNotes()]);
+    const { readCampaignLinks, readCampaignNotes, readCampaignVip } = await import("@/lib/pull-campaign-meta");
+    const [feed, links, notes, vip] = await Promise.all([readDreiFeed(), readCampaignLinks(), readCampaignNotes(), readCampaignVip()]);
     campaignHealthSyncedAt = feed?.at ?? "";
     campaignLinks = links;
     campaignNotes = notes;
+    campaignVip = vip;
     campaignOptions = (feed?.campaigns ?? []).map((c) => c.name).filter(Boolean);
     const byName: Record<string, { sent?: number; replied: number; interested: number; priced: number; notInterested: number; optedOut: number }> = {};
     for (const h of (feed?.campaignHealth ?? [])) byName[normCampaignName(h.name)] = h;
@@ -359,7 +361,7 @@ export default async function MarketsPage() {
       {leader && <PullPriorityList rows={pullPriority} />}
       <MarketsTabs
         showResearch={leader}
-        map={<MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPointsRanked} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining + closedAddrsRemaining} buyerCoverage={buyerCoverage} pullStats={pullStats} campaignHealth={campaignHealth} campaignInterested={campaignInterested} campaignOffers={campaignOffers} campaignNotes={campaignNotes} campaignLinks={campaignLinks} campaignOptions={campaignOptions} campaignHealthSyncedAt={campaignHealthSyncedAt} closedDeals={closedDeals} zipPoints={zipPoints} />}
+        map={<MarketsBoard markets={views} canEdit={leader} buyerPoints={buyerPoints} geocodeRemaining={geocodeRemaining} territories={territories} terrStats={terrStats} scanPoints={scanPointsRanked} leadPins={leadPins} leadZipsRemaining={leadZipsRemaining + closedAddrsRemaining} buyerCoverage={buyerCoverage} pullStats={pullStats} campaignHealth={campaignHealth} campaignInterested={campaignInterested} campaignOffers={campaignOffers} campaignNotes={campaignNotes} campaignLinks={campaignLinks} campaignVip={campaignVip} campaignOptions={campaignOptions} campaignHealthSyncedAt={campaignHealthSyncedAt} closedDeals={closedDeals} zipPoints={zipPoints} />}
         research={leader ? <ResearchWorkbench quickMarkets={quickMarkets} scan={scanAtAGlance} demand={demand} coverage={coverageByFips} marketStats={marketStatsByFips} /> : null}
         finder={<MarketFinder initial={scanStore} canRefresh={leader} zipMarket={zipMarket} />}
         niches={<NichePlaybook matches={nicheMatches} />}

@@ -125,7 +125,7 @@ function loadScript(src: string, css?: string): Promise<void> {
   });
 }
 
-export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemaining = 0, canEdit = false, territories = [], terrStats = {}, scanPoints = [], leadPins = [], leadZipsRemaining = 0, buyerCoverage = [], pullStats = {}, campaignHealth = {}, campaignInterested = {}, campaignOffers = {}, campaignNotes = {}, campaignLinks = {}, campaignOptions = [], campaignHealthSyncedAt = "", closedDeals = [], zipPoints = [] }: { markets: MarketView[]; buyerPoints?: Pt[]; geocodeRemaining?: number; canEdit?: boolean; territories?: Territory[]; terrStats?: Record<string, { leads: number; deals: number }>; scanPoints?: ScanPt[]; leadPins?: LeadPin[]; leadZipsRemaining?: number; buyerCoverage?: BuyerCoverage[]; pullStats?: Record<string, { leads: number; offersMade: number; contractSent: number; closed: number; value: number }>; campaignHealth?: Record<string, { sent: number; replied: number; interested: number; priced: number; notInterested: number; optedOut: number }>; campaignInterested?: Record<string, Array<{ name: string; phone: string; address: string; status: string; at: string }>>; campaignOffers?: Record<string, Array<{ name: string; address: string; value: number; stage: string; at: string }>>; campaignNotes?: Record<string, Array<{ text: string; by: string; at: string }>>; campaignLinks?: Record<string, string>; campaignOptions?: string[]; campaignHealthSyncedAt?: string; closedDeals?: ClosedDeal[]; zipPoints?: ZipPt[] }) {
+export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemaining = 0, canEdit = false, territories = [], terrStats = {}, scanPoints = [], leadPins = [], leadZipsRemaining = 0, buyerCoverage = [], pullStats = {}, campaignHealth = {}, campaignInterested = {}, campaignOffers = {}, campaignNotes = {}, campaignLinks = {}, campaignVip = {}, campaignOptions = [], campaignHealthSyncedAt = "", closedDeals = [], zipPoints = [] }: { markets: MarketView[]; buyerPoints?: Pt[]; geocodeRemaining?: number; canEdit?: boolean; territories?: Territory[]; terrStats?: Record<string, { leads: number; deals: number }>; scanPoints?: ScanPt[]; leadPins?: LeadPin[]; leadZipsRemaining?: number; buyerCoverage?: BuyerCoverage[]; pullStats?: Record<string, { leads: number; offersMade: number; contractSent: number; closed: number; value: number }>; campaignHealth?: Record<string, { sent: number; replied: number; interested: number; priced: number; notInterested: number; optedOut: number }>; campaignInterested?: Record<string, Array<{ name: string; phone: string; address: string; status: string; at: string }>>; campaignOffers?: Record<string, Array<{ name: string; address: string; value: number; stage: string; at: string }>>; campaignNotes?: Record<string, Array<{ text: string; by: string; at: string }>>; campaignLinks?: Record<string, string>; campaignVip?: Record<string, boolean>; campaignOptions?: string[]; campaignHealthSyncedAt?: string; closedDeals?: ClosedDeal[]; zipPoints?: ZipPt[] }) {
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<unknown>(null);
   const dataRef = useRef<unknown>(null);   // markets + buyers + saved territories
@@ -179,6 +179,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
   const [openCampaign, setOpenCampaign] = useState<string | null>(null);
   const [notesState, setNotesState] = useState<Record<string, Array<{ text: string; by: string; at: string }>>>(campaignNotes);
   const [linkState, setLinkState] = useState<Record<string, string>>(campaignLinks);
+  const [vipState, setVipState] = useState<Record<string, boolean>>(campaignVip);
   const [noteDraft, setNoteDraft] = useState("");
   const [metaBusy, setMetaBusy] = useState(false);
   async function saveCampaignLink(batchId: string, campaign: string) {
@@ -186,6 +187,14 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
     try {
       await fetch("/api/markets/campaign-meta", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "link", batchId, campaign }) });
       router.refresh(); // re-resolve interested repliers + offers now attached by the new link
+    } catch { /* optimistic */ }
+  }
+  // ⭐ Toggle a pull list as a VIP JV campaign (Jon × Jon land JV) — owner only; sorts to the top + badge.
+  async function toggleCampaignVip(batchId: string) {
+    const next = !vipState[batchId];
+    setVipState((s) => { const n = { ...s }; if (next) n[batchId] = true; else delete n[batchId]; return n; });
+    try {
+      await fetch("/api/markets/campaign-meta", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "vip", batchId, vip: next }) });
     } catch { /* optimistic */ }
   }
   async function addCampaignNote(batchId: string) {
@@ -949,7 +958,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
       </div>
       {pullBatches.length > 0 && (() => {
         const conv = (id: string) => pullStats[id] || { leads: 0, offersMade: 0, contractSent: 0, closed: 0, value: 0 };
-        const agg = pullBatches.reduce((a, b) => { const c = conv(b.id); a.pulled += b.count; a.leads += c.leads; a.offers += c.offersMade; a.contract += c.contractSent; a.closed += c.closed; a.value += c.value; return a; }, { pulled: 0, leads: 0, offers: 0, contract: 0, closed: 0, value: 0 });
+        const agg = pullBatches.reduce((a, b) => { const c = conv(b.id); const h = campaignHealth[b.id]; a.pulled += b.count; a.replied += h?.replied || 0; a.interested += h?.interested || 0; a.notInt += h ? (h.notInterested + h.optedOut) : 0; a.leads += c.leads; a.offers += c.offersMade; a.contract += c.contractSent; a.closed += c.closed; a.value += c.value; return a; }, { pulled: 0, replied: 0, interested: 0, notInt: 0, leads: 0, offers: 0, contract: 0, closed: 0, value: 0 });
         const pct = (n: number, d: number) => (d > 0 ? `${((n / d) * 100).toFixed(n / d < 0.1 ? 2 : 1)}%` : "—");
         return (
         <div className="mt-2 px-1">
@@ -964,6 +973,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
           <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-slate-800/60 px-2.5 py-1.5 text-[11px] ring-1 ring-slate-700">
             <span className="font-bold text-slate-200">📈 Pull → close conversion:</span>
             <span className="text-slate-300">📤 <b>{agg.pulled.toLocaleString()}</b> pulled</span><span className="text-slate-600">→</span>
+            <span className="text-indigo-300" title="SMS replies received back from these pulls (Direct REI), split into interested vs not-interested"><b>💬 {agg.replied.toLocaleString()}</b> SMS back <span className="text-emerald-400">👍{agg.interested.toLocaleString()} interested</span> <span className="text-slate-400">👎{agg.notInt.toLocaleString()} not</span> <span className="text-slate-500">({pct(agg.replied, agg.pulled)})</span></span><span className="text-slate-600">→</span>
             <span className="text-sky-300">📥 <b>{agg.leads.toLocaleString()}</b> CRM leads <span className="text-slate-500">({pct(agg.leads, agg.pulled)})</span></span><span className="text-slate-600">→</span>
             <span className="text-teal-300" title="Leads we made an offer to — how the market is RESPONDING to our outreach">💵 <b>{agg.offers.toLocaleString()}</b> offers <span className="text-slate-500">({pct(agg.offers, agg.leads)} of leads)</span></span><span className="text-slate-600">→</span>
             <span className="text-emerald-300">📝 <b>{agg.contract.toLocaleString()}</b> contracts</span><span className="text-slate-600">→</span>
@@ -971,7 +981,7 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
             <span className="ml-auto text-slate-500">traced by ZIP + “came in after the pull date”</span>
           </div>
           <div className="flex flex-col gap-1.5">
-            {pullBatches.map((b) => {
+            {[...pullBatches].sort((x, y) => (vipState[y.id] ? 1 : 0) - (vipState[x.id] ? 1 : 0)).map((b) => {
               const end = new Date(`${b.at}T00:00:00`); end.setDate(end.getDate() + 90);
               const left = Math.max(0, Math.ceil((end.getTime() - Date.now()) / 86_400_000));
               const c = conv(b.id);
@@ -983,8 +993,10 @@ export default function HaloMarketMap({ markets, buyerPoints = [], geocodeRemain
                       <span className={`rounded px-1 py-0.5 text-[9.5px] font-bold ring-1 ${sel ? "bg-purple-400/30 text-white ring-purple-300" : "bg-purple-500/15 text-purple-300 ring-purple-500/40"}`}>{sel ? "✓ showing" : "📍 show area"}</span>
                       📄 {b.name} · {b.count.toLocaleString()}{b.zips.length ? ` · ${b.zips.length} ZIP${b.zips.length > 1 ? "s" : ""}` : ""} · {b.at}
                     </span>
+                    {vipState[b.id] && <span className="rounded bg-amber-400/20 px-1.5 py-0.5 text-[9.5px] font-bold text-amber-300 ring-1 ring-amber-400/50" title="VIP — Jon × Jon JV campaign">⭐ VIP JV</span>}
                     <span className={left > 0 ? "text-amber-300" : "text-emerald-300"} title={left > 0 ? `Don't re-pull this area until ${end.toISOString().slice(0, 10)} (90-day cooldown)` : "Cooldown passed — OK to re-pull"}>{left > 0 ? `⏳ ${left}d` : "✓ clear"}</span>
-                    {canEdit && <button onClick={(e) => { e.stopPropagation(); deletePullBatch(b.id); }} title="Remove this pull list" className="ml-auto text-purple-300/70 hover:text-white">× remove</button>}
+                    {canEdit && <button onClick={(e) => { e.stopPropagation(); toggleCampaignVip(b.id); }} title="Flag as a VIP JV campaign (Jon × Jon land JV) — sorts to the top" className={`ml-auto ${vipState[b.id] ? "text-amber-300" : "text-purple-300/50 hover:text-amber-300"}`}>{vipState[b.id] ? "⭐ VIP" : "☆ VIP"}</button>}
+                    {canEdit && <button onClick={(e) => { e.stopPropagation(); deletePullBatch(b.id); }} title="Remove this pull list" className="ml-1 text-purple-300/70 hover:text-white">× remove</button>}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10.5px]">
                     {c.leads > 0 ? (<>

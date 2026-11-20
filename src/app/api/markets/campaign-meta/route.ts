@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, isManager } from "@/lib/auth";
-import { readCampaignLinks, setCampaignLink, readCampaignNotes, addCampaignNote, deleteCampaignNote } from "@/lib/pull-campaign-meta";
+import { readCampaignLinks, setCampaignLink, readCampaignNotes, addCampaignNote, deleteCampaignNote, readCampaignVip, setCampaignVip } from "@/lib/pull-campaign-meta";
 
 export const dynamic = "force-dynamic";
 
@@ -9,13 +9,13 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const me = await getCurrentUser();
   if (!isManager(me)) return NextResponse.json({ error: "no access" }, { status: 403 });
-  return NextResponse.json({ links: await readCampaignLinks(), notes: await readCampaignNotes() });
+  return NextResponse.json({ links: await readCampaignLinks(), notes: await readCampaignNotes(), vip: await readCampaignVip() });
 }
 
 export async function POST(req: NextRequest) {
   const me = await getCurrentUser();
   if (!isManager(me)) return NextResponse.json({ error: "no access" }, { status: 403 });
-  let body: { action?: string; batchId?: string; campaign?: string; text?: string; at?: string } = {};
+  let body: { action?: string; batchId?: string; campaign?: string; text?: string; at?: string; vip?: boolean } = {};
   try { body = await req.json(); } catch { return NextResponse.json({ error: "bad body" }, { status: 400 }); }
   const batchId = (body.batchId || "").trim();
   if (!batchId) return NextResponse.json({ error: "missing batchId" }, { status: 400 });
@@ -31,6 +31,8 @@ export async function POST(req: NextRequest) {
     case "delnote":
       if (body.at) await deleteCampaignNote(batchId, body.at);
       return NextResponse.json({ ok: true, notes: (await readCampaignNotes())[batchId] ?? [] });
+    case "vip":
+      return NextResponse.json({ ok: true, vip: await setCampaignVip(batchId, body.vip !== false) });
     default:
       return NextResponse.json({ error: "unknown action" }, { status: 400 });
   }
