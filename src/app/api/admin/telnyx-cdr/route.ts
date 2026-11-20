@@ -86,6 +86,44 @@ export async function GET(req: NextRequest) {
   const end = new Date().toISOString();
   const start = new Date(Date.now() - days * 86400000).toISOString();
 
+  // 🔎 Voice-usage audit across EVERY Telnyx voice record type (Jon 2026-11-19: "Marie only
+  // dials on Telnyx via Direct REI + War Room — double-check the billing usage for today").
+  // Direct REI calls may land under a different record_type than the War Room's call-control.
+  // Counts per type via meta.total_results (cheap) for TODAY (Pacific) and a 48h safety window.
+  if (sp.get("voice") === "1") {
+    const tz = "America/Los_Angeles";
+    const ymd = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
+    const todayStart = new Date(`${ymd}T00:00:00-08:00`).toISOString();
+    const now = new Date().toISOString();
+    const w48 = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
+    const candidateTypes = ["call-control", "call_control", "sip-trunking", "sip_trunking", "siptrunking", "siprec", "conference", "conference-participant", "verify", "webrtc", "media-streaming", "tts", "stt", "fax"];
+    const countType = async (rt: string, s: string, e: string): Promise<{ status: number; total: number | null }> => {
+      const qs = `filter[record_type]=${encodeURIComponent(rt)}&filter[started_at][gte]=${encodeURIComponent(s)}&filter[started_at][lt]=${encodeURIComponent(e)}&page[size]=1&page[number]=1`;
+      try {
+        const r = await fetch(`https://api.telnyx.com/v2/detail_records?${qs}`, { headers: { Authorization: `Bearer ${key}` }, cache: "no-store" });
+        const b = (await r.json().catch(() => ({}))) as { meta?: { total_results?: number } };
+        return { status: r.status, total: r.status === 200 ? (b.meta?.total_results ?? 0) : null };
+      } catch { return { status: 0, total: null }; }
+    };
+    const rows: Array<{ record_type: string; status: number; today: number | null; last48h: number | null }> = [];
+    for (const rt of candidateTypes) {
+      const [t, w] = await Promise.all([countType(rt, todayStart, now), countType(rt, w48, now)]);
+      rows.push({ record_type: rt, status: t.status, today: t.total, last48h: w.total });
+    }
+    const valid = rows.filter((r) => r.status === 200);
+    const todayVoiceTotal = valid.reduce((a, r) => a + (r.today ?? 0), 0);
+    const callAgg = await aggregate(key, "call-control", "started_at", todayStart, now);
+    return NextResponse.json({
+      ok: true,
+      note: "Which Telnyx voice record types exist (status 200) and how many legs TODAY (Pacific) vs last 48h. If Direct REI calls aren't in call-control, they show under another 200 type here.",
+      windowToday: { todayStart, now, tz },
+      validTypes: valid,
+      allTypesProbed: rows,
+      todayVoiceTotalAcrossAllTypes: todayVoiceTotal,
+      callControlTodayDetail: { legs: callAgg.legs, connected: callAgg.connected, billedSec: callAgg.billedSec, cost: callAgg.sumCost },
+    });
+  }
+
   if (sp.get("sample") === "1") {
     const [callUnderscore, callHyphen, messaging] = await Promise.all([
       pull(key, "call_control", "started_at", start, end),
