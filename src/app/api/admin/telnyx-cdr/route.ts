@@ -42,17 +42,18 @@ async function pull(key: string, recordType: string, dateField: string, start: s
 }
 
 // Aggregate every page of a record type, summing cost + classifying call legs.
-async function aggregate(key: string, recordType: string, dateField: string, start: string, end: string, maxPages = 40) {
+async function aggregate(key: string, recordType: string, dateField: string, start: string, end: string, maxPages = 12) {
   let page = 1, legs = 0, connected = 0, withCostGt0 = 0, sumCost = 0, sumRate = 0, billedSec = 0;
+  let apiError: unknown = null, stoppedEarly = false;
   const top: Array<{ cost: string; billed_sec: unknown; call_sec?: unknown; direction: unknown; connection_name?: unknown; started_at?: unknown }> = [];
   while (page <= maxPages) {
     const qs =
       `filter[record_type]=${encodeURIComponent(recordType)}` +
       `&filter[${dateField}][gte]=${encodeURIComponent(start)}&filter[${dateField}][lt]=${encodeURIComponent(end)}` +
-      `&page[size]=250&page[number]=${page}`;
+      `&page[size]=50&page[number]=${page}`;
     const r = await fetch(`https://api.telnyx.com/v2/detail_records?${qs}`, { headers: { Authorization: `Bearer ${key}` } });
-    if (r.status !== 200) break;
-    const body = (await r.json()) as { data?: Rec[]; meta?: { total_pages?: number } };
+    const body = (await r.json().catch(() => ({}))) as { data?: Rec[]; meta?: { total_pages?: number }; errors?: unknown };
+    if (r.status !== 200) { apiError = { status: r.status, errors: body.errors }; break; }
     const data = body.data ?? [];
     for (const d of data) {
       legs++;
@@ -68,9 +69,10 @@ async function aggregate(key: string, recordType: string, dateField: string, sta
     }
     const totalPages = body.meta?.total_pages ?? 1;
     if (page >= totalPages || data.length === 0) break;
+    if (page >= maxPages) { stoppedEarly = true; break; }
     page++;
   }
-  return { recordType, legs, connected, withCostGt0, sumCost: Number(sumCost.toFixed(4)), sumRate: Number(sumRate.toFixed(4)), billedSec, pagesScanned: page, sampleCostlyLegs: top };
+  return { recordType, legs, connected, withCostGt0, sumCost: Number(sumCost.toFixed(4)), sumRate: Number(sumRate.toFixed(4)), billedSec, pagesScanned: page, partialScan: stoppedEarly, apiError, sampleCostlyLegs: top };
 }
 
 export async function GET(req: NextRequest) {
