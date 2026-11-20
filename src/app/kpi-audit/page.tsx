@@ -4,8 +4,11 @@ import { getAllUsers } from "@/lib/data";
 import { Card, SectionTitle } from "@/components/ui";
 import { kpiProofsFor, type KpiProof } from "@/lib/kpi-receipts";
 import { secondaryPositionOf } from "@/lib/roles";
+import { teamTelnyxReconciliation, type KpiReconciliation } from "@/lib/telnyx-billing";
 
 export const dynamic = "force-dynamic";
+
+const hms = (secs: number) => { const m = Math.round(secs / 60); return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`; };
 
 const PT_TODAY = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
 const shiftDay = (ymd: string, days: number) => { const d = new Date(ymd + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
@@ -46,6 +49,16 @@ function statusChip(p: KpiProof) {
   }
 }
 
+function reconMeta(r: KpiReconciliation) {
+  const pct = r.talkRatio != null ? Math.round(r.talkRatio * 100) : null;
+  switch (r.status) {
+    case "over": return { dot: "🔴", ring: "ring-2 ring-red-200", head: "text-red-700", label: `Over-reported — ${pct}% of carrier talk`, blurb: `The team's logged talk time is HIGHER than Telnyx actually billed. You can't log more talk than the carrier recorded — this gap means padded numbers. Open each rep's audit below to find the source.` };
+    case "under": return { dot: "🟡", ring: "ring-2 ring-amber-200", head: "text-amber-700", label: `Under-logged — only ${pct}% of carrier talk`, blurb: `Telnyx billed far more talk than the scorecards captured. Usually means real dialing happening off the scorecard (Direct REI calls not logged) — coverage gap, not dishonesty, but worth closing so the KPIs reflect reality.` };
+    case "consistent": return { dot: "🟢", ring: "ring-2 ring-emerald-200", head: "text-emerald-700", label: `Consistent — ${pct}% of carrier talk logged`, blurb: `Logged talk time lines up with what Telnyx actually billed across Direct REI + War Room. The team's call numbers hold up against the carrier truth.` };
+    default: return { dot: "⚪", ring: "", head: "text-slate-600", label: "No carrier data for this range", blurb: r.available ? "Telnyx shows no billed calls in this window." : "Telnyx isn't reachable (no API key set) — can't cross-check against the carrier right now." };
+  }
+}
+
 export default async function KpiAuditPage({ searchParams }: { searchParams: Promise<{ rep?: string; date?: string; range?: string; from?: string; to?: string }> }) {
   const me = await getCurrentUser();
   if (!me) return null;
@@ -75,10 +88,61 @@ export default async function KpiAuditPage({ searchParams }: { searchParams: Pro
   const range = resolveRange(rangeKey, sp.from ?? sp.date, sp.to ?? sp.date);
   const proofs = rep ? await kpiProofsFor(rep, range.from, range.to) : [];
   const flagged = proofs.filter((p) => p.status === "over_reported").length;
+  // 🧮 Team-level carrier reconciliation (Telnyx sees BOTH Direct REI + War Room; the per-rep
+  // audit below only sees War Room CRM). Talk time is the honesty anchor.
+  const recon = await teamTelnyxReconciliation(range.from, range.to, users.map((u) => ({ id: u.id, name: u.name }))).catch(() => null);
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
       <SectionTitle title="🧾 KPI Verification — trust but verify" subtitle="The 💰 Money Movers from each person's scorecard, recomputed straight from the records behind them. Pick a day, week, or month and open any KPI to see the receipts — which cards, which buyers, who, and when. C-suite only." accent={flagged ? "bg-red-500" : "bg-emerald-500"} />
+
+      {/* 🧮 Team carrier reconciliation — Telnyx truth vs what the team reported (talk-time anchor) */}
+      {recon && (() => {
+        const m = reconMeta(recon);
+        const solo = recon.workersLogged.length === 1 ? recon.workersLogged[0] : null;
+        return (
+          <Card className={`p-4 ${m.ring}`}>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-lg">{m.dot}</span>
+              <span className="text-sm font-extrabold text-slate-800">Carrier reconciliation — the whole team vs Telnyx</span>
+              <span className={`ml-auto rounded-full px-2.5 py-0.5 text-[11px] font-bold ${m.head} bg-slate-50 ring-1 ring-slate-100`}>{m.label}</span>
+            </div>
+            <p className="mt-1.5 text-xs text-slate-500">Telnyx bills <b>every</b> call on <b>Direct REI + the War Room</b> — the per-rep audit below only sees War Room. <b>Talk time</b> is the anchor: nobody can log more talk than the carrier actually billed. Range: {range.from === range.to ? range.from : `${range.from} → ${range.to}`} (PT).</p>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-xl bg-slate-50 p-2.5 ring-1 ring-slate-100">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Talk · reported</div>
+                <div className="mt-0.5 text-lg font-black text-slate-800">{hms(recon.reportedTalkSec)}</div>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-2.5 ring-1 ring-slate-100">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Talk · Telnyx</div>
+                <div className="mt-0.5 text-lg font-black text-slate-800">{recon.available ? hms(recon.carrierTalkSec) : "—"}</div>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-2.5 ring-1 ring-slate-100">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Carrier calls</div>
+                <div className="mt-0.5 text-lg font-black text-slate-800">{recon.available ? recon.carrierOutbound.toLocaleString() : "—"}</div>
+                <div className="text-[10px] text-slate-400">{recon.carrierConnected} connected</div>
+              </div>
+            </div>
+            <p className={`mt-2 text-[12px] ${m.head}`}>{m.blurb}</p>
+            {recon.available && recon.byConnection.length > 0 && (
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {recon.byConnection.map((ch) => (
+                  <span key={ch.name} className="rounded-lg bg-slate-50 px-2.5 py-1 text-[11px] text-slate-600 ring-1 ring-slate-100">
+                    <b className="text-slate-700">{ch.name}</b> · {ch.outbound} out · {ch.connected} conn · {hms(ch.talkSec)} talk
+                  </span>
+                ))}
+              </div>
+            )}
+            {solo ? (
+              <p className="mt-2.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-[12px] text-indigo-700 ring-1 ring-indigo-100">
+                🎯 Only <b>{solo.name}</b> logged activity this range — so <b>all</b> Telnyx usage attributes to them. They reported <b>{hms(solo.talkSec)}</b> talk vs the carrier&apos;s <b>{hms(recon.carrierTalkSec)}</b>.
+              </p>
+            ) : recon.workersLogged.length > 1 ? (
+              <p className="mt-2.5 text-[11px] text-slate-400">{recon.workersLogged.length} people logged activity ({recon.workersLogged.map((w) => `${w.name} ${hms(w.talkSec)}`).join(" · ")}). Telnyx can&apos;t split Direct REI per person (shared login), so this is a team total — on a single-worker day it becomes an exact per-person check.</p>
+            ) : null}
+          </Card>
+        );
+      })()}
 
       {/* Controls */}
       <Card className="p-4 space-y-3">

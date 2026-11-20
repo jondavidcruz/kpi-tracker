@@ -197,3 +197,73 @@ export async function telnyxCommsBreakdown(startISO: string, endISO: string): Pr
     calls: { total: call.total || call.rows.length, scanned: call.rows.length, partial: call.partial, cost: Number(callCost.toFixed(4)), outbound, connected, talkSec, byConnection },
   };
 }
+
+// 🧮 TEAM KPI RECONCILIATION against the Telnyx carrier truth (Jon 2026-11-19).
+// The per-rep /kpi-audit page verifies a rep's scorecard against WAR ROOM CRM records — but the
+// CRM never sees Direct REI calls, so reps who dial on Direct REI (e.g. Marie) can't be verified
+// there. Telnyx bills BOTH Direct REI + War Room, so a TEAM-level talk-time reconciliation is the
+// one carrier cross-check that covers everything. TALK TIME is the honesty anchor: you physically
+// cannot log more talk than the carrier billed, so reported-talk > carrier-talk = padding.
+export type KpiReconciliation = {
+  available: boolean;                // false = no Telnyx key / no carrier data for the range
+  from: string; to: string;
+  reportedTalkSec: number;           // Σ all audited reps' talk-time KPI entries (seconds)
+  carrierTalkSec: number;            // Telnyx billed talk (Direct REI + War Room), seconds
+  reportedDials: number;             // Σ reported outbound-dial KPI entries
+  carrierOutbound: number;           // Telnyx outbound call legs
+  reportedConnects: number;          // Σ reported connection/contact KPI entries
+  carrierConnected: number;          // Telnyx connected legs (billed_sec > 0)
+  status: "consistent" | "over" | "under" | "no_carrier";
+  talkRatio: number | null;          // reported / carrier (null if carrier 0)
+  workersLogged: { id: string; name: string; talkSec: number }[]; // reps who logged any activity
+  byConnection: CommsCallChannel[];  // Direct REI vs War Room split, carrier side
+};
+const TALK_KEYS = ["acq_talk_time", "acq_dialer_talk_time", "ds_talk_time", "ds_dialer_talk_time", "cc_talk_time"];
+const DIAL_KEYS = ["outbound_calls"];
+const CONNECT_KEYS = ["connected_calls", "buyers_contacted", "dev_conversations"];
+/** PT calendar date (YYYY-MM-DD) → ISO instant at local midnight. Nov = PST (-08:00). */
+const ptMidnight = (ymd: string, addDays = 0) => {
+  const d = new Date(`${ymd}T00:00:00-08:00`);
+  d.setUTCDate(d.getUTCDate() + addDays);
+  return d.toISOString();
+};
+export async function teamTelnyxReconciliation(fromYmd: string, toYmd: string, reps: { id: string; name: string }[]): Promise<KpiReconciliation> {
+  const repIds = reps.map((r) => r.id);
+  const nameOf = new Map(reps.map((r) => [r.id, r.name]));
+  const base: KpiReconciliation = {
+    available: false, from: fromYmd, to: toYmd, reportedTalkSec: 0, carrierTalkSec: 0,
+    reportedDials: 0, carrierOutbound: 0, reportedConnects: 0, carrierConnected: 0,
+    status: "no_carrier", talkRatio: null, workersLogged: [], byConnection: [],
+  };
+  // Reported side: sum Entry.value by KPI-key group for these reps across the PT date range.
+  const kpis = await db.kpi.findMany({ where: { key: { in: [...TALK_KEYS, ...DIAL_KEYS, ...CONNECT_KEYS] } }, select: { id: true, key: true } }).catch(() => []);
+  const keyOf = new Map(kpis.map((k) => [k.id, k.key]));
+  const entries = await db.entry.findMany({
+    where: { kpiId: { in: kpis.map((k) => k.id) }, userId: { in: repIds }, date: { gte: fromYmd, lte: toYmd } },
+    select: { kpiId: true, userId: true, value: true },
+  }).catch(() => []);
+  const talkByRep = new Map<string, number>();
+  for (const e of entries) {
+    const key = keyOf.get(e.kpiId); if (!key) continue;
+    if (TALK_KEYS.includes(key)) { base.reportedTalkSec += e.value; if (e.userId) talkByRep.set(e.userId, (talkByRep.get(e.userId) ?? 0) + e.value); }
+    else if (DIAL_KEYS.includes(key)) base.reportedDials += e.value;
+    else if (CONNECT_KEYS.includes(key)) base.reportedConnects += e.value;
+  }
+  const loggedIds = new Set(entries.filter((e) => e.userId).map((e) => e.userId!));
+  base.workersLogged = [...loggedIds].map((id) => ({ id, name: nameOf.get(id) ?? id, talkSec: talkByRep.get(id) ?? 0 })).sort((a, b) => b.talkSec - a.talkSec);
+  // Carrier side: Telnyx billed calls over the same window (both Direct REI + War Room).
+  const comms = await telnyxCommsBreakdown(ptMidnight(fromYmd), ptMidnight(toYmd, 1)).catch(() => null);
+  if (!comms) return base;
+  base.available = true;
+  base.carrierTalkSec = comms.calls.talkSec;
+  base.carrierOutbound = comms.calls.outbound;
+  base.carrierConnected = comms.calls.connected;
+  base.byConnection = comms.calls.byConnection;
+  const T = base.carrierTalkSec, R = base.reportedTalkSec;
+  if (T <= 0) base.status = "no_carrier";
+  else {
+    base.talkRatio = R / T;
+    base.status = R > T * 1.1 ? "over" : R >= T * 0.6 ? "consistent" : "under";
+  }
+  return base;
+}
