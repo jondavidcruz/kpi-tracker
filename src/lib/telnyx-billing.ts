@@ -133,12 +133,16 @@ export function analyzeTelnyxSpend(snaps: BalanceSnap[]): SpendReport {
 // giving per-channel count + SPEND + in/out, which is what "usage from Direct REI vs War Room"
 // means. Carrier-level: inbound + outbound, per billed segment. Grand total comes from
 // meta.total_results (exact even when the per-channel scan is capped on a huge campaign day).
-type TxRec = { profile_name?: string; profile_id?: string; cost?: string; direction?: string; billed_sec?: number };
+type TxRec = { profile_name?: string; profile_id?: string; cost?: string; direction?: string; billed_sec?: number; duration?: number; call_sec?: number; connection_name?: string };
 export type CommsChannel = { name: string; count: number; cost: number; inbound: number; outbound: number };
+export type CommsCallChannel = { name: string; calls: number; outbound: number; connected: number; talkSec: number; cost: number };
 export type CommsBreakdown = {
   messages: { total: number; scanned: number; partial: boolean; cost: number; byChannel: CommsChannel[] };
-  calls: { total: number; scanned: number; partial: boolean; cost: number; connected: number };
+  // Calls come from the `sip-trunking` record type — one record per billed call — NOT `call-control`,
+  // which only sees a tiny slice (Jon 2026-11-19: CDR proved the real calls are SIP-trunking/WebRTC).
+  calls: { total: number; scanned: number; partial: boolean; cost: number; outbound: number; connected: number; talkSec: number; byConnection: CommsCallChannel[] };
 };
+const prettyConn = (n: string) => /directrei|direct rei/i.test(n) ? "Direct REI" : /browser dialer/i.test(n) ? "War Room (browser dialer)" : /war room inbound/i.test(n) ? "War Room (inbound / click-to-call)" : (n || "(unknown)");
 export async function telnyxCommsBreakdown(startISO: string, endISO: string): Promise<CommsBreakdown | null> {
   const key = process.env.TELNYX_API_KEY;
   if (!key) return null;
@@ -164,7 +168,7 @@ export async function telnyxCommsBreakdown(startISO: string, endISO: string): Pr
     return { rows, total, partial };
   };
   const num = (s: unknown) => Math.abs(parseFloat(String(s ?? "0"))) || 0;
-  const [msg, call] = await Promise.all([page("messaging", "created_at", 30), page("call-control", "started_at", 10)]);
+  const [msg, call] = await Promise.all([page("messaging", "created_at", 30), page("sip-trunking", "started_at", 20)]);
   const byName = new Map<string, CommsChannel>();
   let msgCost = 0;
   for (const m of msg.rows) {
@@ -175,11 +179,21 @@ export async function telnyxCommsBreakdown(startISO: string, endISO: string): Pr
     if (m.direction === "inbound") ch.inbound++; else ch.outbound++;
     byName.set(name, ch);
   }
-  let callCost = 0, connected = 0;
-  for (const c of call.rows) { callCost += num(c.cost); if (Number(c.billed_sec ?? 0) > 0) connected++; }
+  const callDur = (c: TxRec) => Number(c.billed_sec ?? c.duration ?? c.call_sec ?? 0) || 0;
+  const byConn = new Map<string, CommsCallChannel>();
+  let callCost = 0, connected = 0, outbound = 0, talkSec = 0;
+  for (const c of call.rows) {
+    const cost = num(c.cost), dur = callDur(c), isOut = c.direction !== "inbound", isConn = dur > 0;
+    callCost += cost; talkSec += dur; if (isConn) connected++; if (isOut) outbound++;
+    const name = prettyConn((c.connection_name ?? "").trim());
+    const ch = byConn.get(name) ?? { name, calls: 0, outbound: 0, connected: 0, talkSec: 0, cost: 0 };
+    ch.calls++; if (isOut) ch.outbound++; if (isConn) ch.connected++; ch.talkSec += dur; ch.cost += cost;
+    byConn.set(name, ch);
+  }
+  const byConnection = [...byConn.values()].sort((a, b) => b.calls - a.calls).map((ch) => ({ ...ch, cost: Number(ch.cost.toFixed(4)) }));
   const byChannel = [...byName.values()].sort((a, b) => b.count - a.count).map((ch) => ({ ...ch, cost: Number(ch.cost.toFixed(4)) }));
   return {
     messages: { total: msg.total || msg.rows.length, scanned: msg.rows.length, partial: msg.partial, cost: Number(msgCost.toFixed(4)), byChannel },
-    calls: { total: call.total || call.rows.length, scanned: call.rows.length, partial: call.partial, cost: Number(callCost.toFixed(4)), connected },
+    calls: { total: call.total || call.rows.length, scanned: call.rows.length, partial: call.partial, cost: Number(callCost.toFixed(4)), outbound, connected, talkSec, byConnection },
   };
 }

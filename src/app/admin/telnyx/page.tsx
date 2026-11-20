@@ -25,6 +25,10 @@ function when(iso: string | null) {
   if (!iso) return "—";
   return new Date(iso).toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
+function hm(secs: number) {
+  const m = Math.round(secs / 60);
+  return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
+}
 
 export default async function TelnyxSpendPage() {
   const me = await getCurrentUser();
@@ -113,9 +117,22 @@ export default async function TelnyxSpendPage() {
           <p className="mt-1 text-xs text-slate-500">Telnyx bills <b>every</b> text &amp; call that went out or came in — across <b>Direct REI</b> and the <b>War Room CRM</b>, per message segment. This is the carrier ground-truth, split by sending channel.</p>
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Card className="p-3"><div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Texts (all)</div><div className="mt-0.5 text-2xl font-black text-slate-800">{comms.messages.total.toLocaleString()}</div><div className="text-[11px] text-slate-400">{money(comms.messages.cost, cur)} · in+out</div></Card>
-            <Card className="p-3"><div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Call legs</div><div className="mt-0.5 text-2xl font-black text-slate-800">{comms.calls.total.toLocaleString()}</div><div className="text-[11px] text-slate-400">{money(comms.calls.cost, cur)} · {comms.calls.connected} connected</div></Card>
-            <Card className="col-span-2 p-3"><div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">War Room CRM logged</div><div className="mt-0.5 text-sm font-bold text-slate-700">{wrSms.toLocaleString()} texts · {wrCalls.toLocaleString()} calls</div><div className="text-[11px] text-slate-400">what our own CRM recorded, per rep</div></Card>
+            <Card className="p-3"><div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Calls (out)</div><div className="mt-0.5 text-2xl font-black text-slate-800">{comms.calls.outbound.toLocaleString()}</div><div className="text-[11px] text-slate-400">{comms.calls.connected} conn · {hm(comms.calls.talkSec)} talk · {money(comms.calls.cost, cur)}</div></Card>
+            <Card className="col-span-2 p-3"><div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">War Room CRM logged</div><div className="mt-0.5 text-sm font-bold text-slate-700">{wrSms.toLocaleString()} texts · {wrCalls.toLocaleString()} calls</div><div className="text-[11px] text-slate-400">the CRM only sees War Room calls — Direct REI calls bill via Telnyx but log outside the CRM</div></Card>
           </div>
+          {comms.calls.byConnection.length > 0 && (
+            <div className="mt-3">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Call usage by channel {comms.calls.partial && <span className="font-semibold text-amber-600">(top {comms.calls.scanned.toLocaleString()} of {comms.calls.total.toLocaleString()})</span>}</div>
+              <div className="mt-1.5 space-y-1">
+                {comms.calls.byConnection.map((ch) => (
+                  <div key={ch.name} className="flex flex-wrap items-center justify-between gap-1 rounded-lg bg-slate-50 px-3 py-1.5 text-xs ring-1 ring-slate-100">
+                    <span className="font-bold text-slate-700">{ch.name}</span>
+                    <span className="text-slate-500">{ch.outbound.toLocaleString()} out <span className="text-slate-300">·</span> {ch.connected} conn <span className="text-slate-300">·</span> {hm(ch.talkSec)} talk <span className="text-slate-300">·</span> <b className="text-slate-700">{money(ch.cost, cur)}</b></span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {comms.messages.byChannel.length > 0 && (
             <div className="mt-3">
               <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Text usage by channel {comms.messages.partial && <span className="font-semibold text-amber-600">(top {comms.messages.scanned.toLocaleString()} of {comms.messages.total.toLocaleString()} — heavy day)</span>}</div>
@@ -129,7 +146,7 @@ export default async function TelnyxSpendPage() {
               </div>
             </div>
           )}
-          <div className="mt-3 text-[11px] text-slate-400">They won&apos;t match the CRM log 1:1 — Telnyx also counts inbound replies, per-segment, and automated Direct REI sends. And most team <b>calls</b> run on DialPad/iPhone, not Telnyx, so Telnyx verifies <b>texts</b> well but undercounts call volume.</div>
+          <div className="mt-3 text-[11px] text-slate-400">Telnyx is the full carrier truth for <b>both</b> texts and calls (Direct REI + War Room). The CRM log only captures <b>War Room</b> calls — Direct REI calls bill through Telnyx but happen in Direct REI&apos;s app, so they won&apos;t show in the CRM count. Calls are read from the <code>sip-trunking</code> record (one per billed call), not <code>call-control</code>.</div>
         </Card>
       )}
 
