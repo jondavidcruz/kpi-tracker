@@ -3,7 +3,8 @@
 // automatically off the dialer heartbeat (~every 18 min during calls) + a daily cron baseline.
 import { getCurrentUser, isOwner } from "@/lib/auth";
 import { Card } from "@/components/ui";
-import { snapshotTelnyxBalance, readSnaps, analyzeTelnyxSpend, getTelnyxBalance } from "@/lib/telnyx-billing";
+import { db } from "@/lib/db";
+import { snapshotTelnyxBalance, readSnaps, analyzeTelnyxSpend, getTelnyxBalance, telnyxCommsCounts } from "@/lib/telnyx-billing";
 import { revalidatePath } from "next/cache";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +45,13 @@ export default async function TelnyxSpendPage() {
   const cur = live?.currency ?? "USD";
   const recentRecharges = [...r.recharges].reverse().slice(0, 12);
   const noKey = live === null && snaps.length === 0;
+
+  // 📊 Team comms verification (today, Pacific): carrier-truth counts vs our own CRM logs.
+  const ymd = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
+  const dayStart = new Date(`${ymd}T00:00:00-08:00`); // PST (Nov); a daily eyeball count
+  const comms = await telnyxCommsCounts(dayStart.toISOString(), new Date().toISOString()).catch(() => null);
+  const wrSms = await db.crmEvent.count({ where: { at: { gte: dayStart }, kind: "sms" } }).catch(() => 0);
+  const wrCalls = await db.crmEvent.count({ where: { at: { gte: dayStart }, kind: "call" } }).catch(() => 0);
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4">
@@ -97,6 +105,24 @@ export default async function TelnyxSpendPage() {
           </p>
         )}
       </Card>
+
+      {/* 📊 Team comms verification — Telnyx is the carrier truth (Jon 2026-11-19) */}
+      {comms && (
+        <Card className="p-4">
+          <div className="text-sm font-extrabold text-slate-800">📊 Comms verification — today</div>
+          <p className="mt-1 text-xs text-slate-500">Telnyx bills <b>every</b> text &amp; call that actually went out or came in — across <b>Direct REI</b> and the <b>War Room CRM</b>, counted per message segment. This is the carrier ground-truth to check reported activity against.</p>
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Card className="p-3"><div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Telnyx texts (all)</div><div className="mt-0.5 text-2xl font-black text-slate-800">{comms.messagesTotal.toLocaleString()}</div><div className="text-[11px] text-slate-400">in + out · segments</div></Card>
+            {comms.splitOk && <Card className="p-3"><div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">↳ Direct REI</div><div className="mt-0.5 text-2xl font-black text-slate-800">{comms.messagesDirectREI.toLocaleString()}</div><div className="text-[11px] text-slate-400">mass marketing</div></Card>}
+            {comms.splitOk && <Card className="p-3"><div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">↳ War Room etc.</div><div className="mt-0.5 text-2xl font-black text-slate-800">{comms.messagesOther.toLocaleString()}</div><div className="text-[11px] text-slate-400">CRM + other profiles</div></Card>}
+            <Card className="p-3"><div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Telnyx call legs</div><div className="mt-0.5 text-2xl font-black text-slate-800">{comms.callLegs.toLocaleString()}</div><div className="text-[11px] text-slate-400">incl. unconnected</div></Card>
+          </div>
+          <div className="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-600 ring-1 ring-slate-100">
+            <b>War Room CRM logged today:</b> {wrSms.toLocaleString()} texts · {wrCalls.toLocaleString()} calls — what our own CRM recorded (per rep).
+            <div className="mt-1 text-slate-400">They won&apos;t match 1:1: Telnyx also counts inbound replies, per-segment, and the automated Direct REI campaigns. Treat Telnyx as the ceiling — a big gap vs the CRM log means texting/calling is happening outside the War Room.</div>
+          </div>
+        </Card>
+      )}
 
       {/* Recharge log */}
       {recentRecharges.length > 0 && (

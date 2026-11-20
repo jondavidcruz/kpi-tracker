@@ -126,3 +126,32 @@ export function analyzeTelnyxSpend(snaps: BalanceSnap[]): SpendReport {
     startBal, endBal,
   };
 }
+
+// 🔎 Team comms VERIFICATION counts (Jon 2026-11-19: "Telnyx will be our verification" — REI Reply
+// retired; Direct REI + War Room both run on Telnyx). Cheap: reads meta.total_results (one request
+// each, NO record pagination). DirectREI mass-marketing is split out via its messaging profile so
+// the rest (War Room CRM traffic) can be eyeballed against our own CrmEvent logs. Counts are
+// carrier-level: inbound + outbound, per billed segment.
+const DIRECTREI_MSG_PROFILE = "40019f8e-dc9a-4b98-8086-de9333fe6f68"; // profile_name "DirectREI"
+export type CommsCounts = { messagesTotal: number; messagesDirectREI: number; messagesOther: number; splitOk: boolean; callLegs: number };
+export async function telnyxCommsCounts(startISO: string, endISO: string): Promise<CommsCounts | null> {
+  if (!process.env.TELNYX_API_KEY) return null;
+  const count = async (recordType: string, dateField: string, extra = ""): Promise<number | null> => {
+    const qs = `filter[record_type]=${encodeURIComponent(recordType)}&filter[${dateField}][gte]=${encodeURIComponent(startISO)}&filter[${dateField}][lt]=${encodeURIComponent(endISO)}${extra}&page[size]=1&page[number]=1`;
+    try {
+      const r = await fetch(`https://api.telnyx.com/v2/detail_records?${qs}`, { headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}` }, cache: "no-store", signal: AbortSignal.timeout(10000) });
+      if (!r.ok) return null;
+      const j = (await r.json()) as { meta?: { total_results?: number } };
+      return j.meta?.total_results ?? 0;
+    } catch { return null; }
+  };
+  const [messagesTotal, direct, callLegs] = await Promise.all([
+    count("messaging", "created_at"),
+    count("messaging", "created_at", `&filter[messaging_profile_id]=${DIRECTREI_MSG_PROFILE}`),
+    count("call-control", "started_at"),
+  ]);
+  const total = messagesTotal ?? 0;
+  const splitOk = direct != null && direct <= total; // the profile filter is supported & sane
+  const messagesDirectREI = splitOk ? (direct as number) : 0;
+  return { messagesTotal: total, messagesDirectREI, messagesOther: splitOk ? Math.max(0, total - messagesDirectREI) : total, splitOk, callLegs: callLegs ?? 0 };
+}
