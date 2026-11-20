@@ -19,7 +19,7 @@ import { CLOSING_ACTUALS_CAT, type ClosingActual } from "@/lib/closing-actuals";
 import { NAV_ORDER_CAT, parseNavOrder, moveInList, type NavOrder } from "@/lib/nav-order";
 import { NAV_GROUPS, defaultNewRepNavHidden } from "@/lib/navItems";
 import { scoreTranscript } from "@/lib/score";
-import { reportWeek, kpiPace, saveReport, LIGHTS } from "@/lib/stoplight";
+import { reportWeek, kpiPace, saveReport } from "@/lib/stoplight";
 import { callTypeLabel } from "@/lib/call-types";
 import { getSettings } from "@/lib/data";
 import { DECK_SECTION_KEYS, resolveOrder, DECK_LAYOUT_CAT } from "@/lib/deck-sections";
@@ -5265,20 +5265,19 @@ export async function setBuilderSizeAction(formData: FormData): Promise<{ ok: bo
 export async function submitStoplight(formData: FormData) {
   const me = await getCurrentUser();
   if (!me) return;
-  const color = String(formData.get("color") ?? "") as (typeof LIGHTS)[number];
-  if (!LIGHTS.includes(color)) redirect("/stoplight?err=color");
-  const note = String(formData.get("note") ?? "").trim().slice(0, 500);
-  const greenWhy = String(formData.get("greenWhy") ?? "").trim().slice(0, 500);
+  // A note per colour (Jon 2026-11-20) — fill any/all; overall light derives from the worst filled.
+  const greenNote = String(formData.get("greenNote") ?? "").trim().slice(0, 500);
+  const yellowNote = String(formData.get("yellowNote") ?? "").trim().slice(0, 500);
+  const redNote = String(formData.get("redNote") ?? "").trim().slice(0, 500);
   const settings = await getSettings();
   const today = todayStr(settings.orgTimezone);
   const week = reportWeek(today);
   const pace = await kpiPace(me, week.start, today);
-  if (color !== "green" && !note) redirect(`/stoplight?err=note&c=${color}`);
-  if (color === "green" && pace.onPace < pace.total && !greenWhy) redirect("/stoplight?err=why&c=green");
-  await saveReport(me, week.start, week.label, color, {
-    note: color === "green" ? "" : note,
-    greenWhy: color === "green" ? greenWhy : "",
-    onPace: pace.onPace, paceTotal: pace.total,
+  if (!greenNote && !yellowNote && !redNote) redirect("/stoplight?err=note");
+  // All-green but KPIs behind pace → make them say what makes it green.
+  if (!yellowNote && !redNote && pace.onPace < pace.total && !greenNote) redirect("/stoplight?err=why");
+  await saveReport(me, week.start, week.label, {
+    greenNote, yellowNote, redNote, onPace: pace.onPace, paceTotal: pace.total,
   });
   revalidatePath("/stoplight");
   revalidatePath("/meeting");

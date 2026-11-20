@@ -25,12 +25,17 @@ export const LIGHT_META: Record<Light, { emoji: string; label: string; meaning: 
 
 export interface StoplightData {
   name: string;
-  note: string;      // required for yellow/red: what's wrong + help/change needed
-  greenWhy: string;  // required when green but KPIs are behind pace: what makes it green
-  onPace: number;    // KPI context captured at submit time
+  // Jon 2026-11-20: a note PER colour (fill any/all, like a real stoplight). Overall
+  // colour = worst one with content (red > yellow > green).
+  greenNote: string;   // what's on track / going well
+  yellowNote: string;  // what's not working + help needed
+  redNote: string;     // what needs to stop/change + who owns it
+  note: string;        // (compat) the worst-colour note — kept for the Monday deck
+  greenWhy: string;    // (compat) = greenNote
+  onPace: number;      // KPI context captured at submit time
   paceTotal: number;
-  at: string;        // ISO submitted
-  issueId: string;   // auto-raised Issue for yellow/red
+  at: string;          // ISO submitted
+  issueId: string;     // auto-raised Issue for yellow/red
 }
 
 export interface StoplightReport extends StoplightData { userId: string; color: Light }
@@ -56,12 +61,17 @@ function parse(row: { title: string; url: string; description: string }): Stopli
   if (!LIGHTS.includes(color)) return null;
   let d: Partial<StoplightData> = {};
   try { d = JSON.parse(row.description || "{}"); } catch { /* keep defaults */ }
+  // Back-compat: old reports stored one `note` for the chosen colour + `greenWhy`.
+  const greenNote = d.greenNote ?? d.greenWhy ?? "";
+  const yellowNote = d.yellowNote ?? (color === "yellow" ? (d.note ?? "") : "");
+  const redNote = d.redNote ?? (color === "red" ? (d.note ?? "") : "");
   return {
     userId: row.title.split("|")[1] ?? "",
     color,
     name: d.name ?? "",
-    note: d.note ?? "",
-    greenWhy: d.greenWhy ?? "",
+    greenNote, yellowNote, redNote,
+    note: d.note ?? (color === "red" ? redNote : color === "yellow" ? yellowNote : ""),
+    greenWhy: d.greenWhy ?? greenNote,
     onPace: d.onPace ?? 0,
     paceTotal: d.paceTotal ?? 0,
     at: d.at ?? "",
@@ -113,21 +123,29 @@ export async function kpiPace(user: { id: string; name: string; position: string
 /** Save (or replace) a user's report for the week; syncs the auto-raised Issue. */
 export async function saveReport(
   user: { id: string; name: string },
-  weekStart: string, weekLabel: string, color: Light,
-  data: { note: string; greenWhy: string; onPace: number; paceTotal: number },
-): Promise<void> {
+  weekStart: string, weekLabel: string,
+  data: { greenNote: string; yellowNote: string; redNote: string; onPace: number; paceTotal: number },
+): Promise<Light> {
+  const greenNote = (data.greenNote || "").trim();
+  const yellowNote = (data.yellowNote || "").trim();
+  const redNote = (data.redNote || "").trim();
+  // Overall colour = the worst thing reported (a red beats a yellow beats all-green).
+  const color: Light = redNote ? "red" : yellowNote ? "yellow" : "green";
   const title = `${weekStart}|${user.id}`;
   const existing = await db.resource.findFirst({ where: { category: STOPLIGHT_CAT, title } });
   const prev = existing ? parse(existing) : null;
   let issueId = prev?.issueId ?? "";
 
+  // The concern(s) that become the auto-raised team Issue — red first, then yellow.
+  const issueBody = [redNote && `🔴 ${redNote}`, yellowNote && `🟡 ${yellowNote}`].filter(Boolean).join("\n");
+
   if (color === "green") {
-    // Went green → drop the auto-raised issue if nobody has worked it yet.
+    // All-green (no yellow/red concerns) → drop the auto-raised issue if nobody has worked it yet.
     if (issueId) await db.issue.updateMany({ where: { id: issueId, status: "open" }, data: { status: "dropped", solveNote: "Stoplight changed to green" } });
   } else {
     const first = user.name.split(" ")[0];
-    const issueTitle = `${LIGHT_META[color].emoji} ${first}: ${data.note}`.slice(0, 140);
-    const detail = `Stoplight check — week of ${weekLabel}. ${LIGHT_META[color].label}: ${LIGHT_META[color].meaning}\n\n${data.note}`;
+    const issueTitle = `${LIGHT_META[color].emoji} ${first}: ${redNote || yellowNote}`.slice(0, 140);
+    const detail = `Stoplight check — week of ${weekLabel}.\n\n${issueBody}`;
     const reuse = issueId ? await db.issue.findUnique({ where: { id: issueId } }) : null;
     if (reuse) {
       await db.issue.update({ where: { id: issueId }, data: { title: issueTitle, detail, status: reuse.status === "dropped" ? "open" : reuse.status, priority: color === "red" ? Math.max(reuse.priority, 1) : reuse.priority } });
@@ -137,12 +155,18 @@ export async function saveReport(
     }
   }
 
-  const payload: StoplightData = { name: user.name, ...data, at: new Date().toISOString(), issueId };
+  const payload: StoplightData = {
+    name: user.name, greenNote, yellowNote, redNote,
+    note: color === "green" ? "" : (color === "red" ? redNote : yellowNote),
+    greenWhy: greenNote,
+    onPace: data.onPace, paceTotal: data.paceTotal, at: new Date().toISOString(), issueId,
+  };
   if (existing) {
     await db.resource.update({ where: { id: existing.id }, data: { url: color, description: JSON.stringify(payload) } });
   } else {
     await db.resource.create({ data: { category: STOPLIGHT_CAT, title, url: color, description: JSON.stringify(payload) } });
   }
+  return color;
 }
 
 export interface StoplightBoard {
@@ -152,7 +176,7 @@ export interface StoplightBoard {
   counts: Record<Light, number>;
   groups: {
     dept: string; emoji: string;
-    people: { name: string; color: Light | null; note: string; prev: Light | null }[];
+    people: { name: string; color: Light | null; note: string; notes: Record<Light, string>; prev: Light | null }[];
   }[];
 }
 
@@ -171,7 +195,8 @@ export async function getBoard(week: { start: string; label: string }): Promise<
     byDept.get(dept)!.people.push({
       name: r.name.split(" ")[0],
       color: rep?.color ?? null,
-      note: rep ? (rep.color === "green" ? rep.greenWhy : rep.note) : "",
+      note: rep ? (rep.color === "green" ? rep.greenNote : rep.color === "red" ? rep.redNote : rep.yellowNote) : "",
+      notes: rep ? { green: rep.greenNote, yellow: rep.yellowNote, red: rep.redNote } : { green: "", yellow: "", red: "" },
       prev: prev.get(r.id)?.color ?? null,
     });
   }

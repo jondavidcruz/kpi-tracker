@@ -36,7 +36,7 @@ export default async function StoplightPage({ searchParams }: { searchParams: Pr
           KPI context: {pace.total ? <><b>{pace.onPace} of {pace.total}</b> daily-goal KPIs on pace this week{pace.behind.length ? ` (behind: ${pace.behind.join(", ")})` : ""}.</> : "no daily-goal KPIs tracked for your role."}
           {" "}KPIs are context — you pick the color.
         </p>
-        <StoplightForm initial={mine?.color ?? null} note={mine?.note ?? ""} greenWhy={mine?.greenWhy ?? ""} behind={pace.behind} err={sp.err} />
+        <StoplightForm greenNote={mine?.greenNote ?? ""} yellowNote={mine?.yellowNote ?? ""} redNote={mine?.redNote ?? ""} behind={pace.behind} err={sp.err} />
       </Card>
 
       <Card className="p-5">
@@ -52,7 +52,11 @@ export default async function StoplightPage({ searchParams }: { searchParams: Pr
                     <span className={`mt-1 h-3 w-3 shrink-0 rounded-full ${p.color ? DOT[p.color] : "bg-slate-200"}`} />
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-semibold text-slate-800">{p.name} <span className="font-normal text-slate-400">{p.color ? LIGHT_META[p.color].label : "not reported yet"}</span></div>
-                      {p.note && <div className="text-xs text-slate-500">{p.note}</div>}
+                      <div className="space-y-0.5">
+                        {p.notes.green && <div className="text-xs text-slate-500">🟢 {p.notes.green}</div>}
+                        {p.notes.yellow && <div className="text-xs text-amber-700">🟡 {p.notes.yellow}</div>}
+                        {p.notes.red && <div className="text-xs text-red-700">🔴 {p.notes.red}</div>}
+                      </div>
                     </div>
                   </div>
                 ))}

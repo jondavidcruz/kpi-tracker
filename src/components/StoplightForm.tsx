@@ -4,57 +4,47 @@ import { useState } from "react";
 import { submitStoplight } from "@/app/actions";
 
 type Light = "green" | "yellow" | "red";
-const OPTS: { c: Light; emoji: string; label: string; meaning: string; ring: string; bg: string }[] = [
-  { c: "green", emoji: "🟢", label: "Green", meaning: "Everything is good — on track to deliver.", ring: "ring-emerald-500", bg: "bg-emerald-50" },
-  { c: "yellow", emoji: "🟡", label: "Yellow", meaning: "Something's not working — we need help fixing it.", ring: "ring-amber-500", bg: "bg-amber-50" },
-  { c: "red", emoji: "🔴", label: "Red", meaning: "Stop — a change is needed.", ring: "ring-red-500", bg: "bg-red-50" },
+const OPTS: { c: Light; emoji: string; label: string; meaning: string; ring: string; ph: string }[] = [
+  { c: "green", emoji: "🟢", label: "Green", meaning: "On track — what's going well.", ring: "focus:ring-emerald-300", ph: "e.g. Buyer list build is on schedule — numbers land next week." },
+  { c: "yellow", emoji: "🟡", label: "Yellow", meaning: "Not working — what help do you need?", ring: "focus:ring-amber-300", ph: "e.g. Buyers aren't responding to the new blast — need help rewriting it." },
+  { c: "red", emoji: "🔴", label: "Red", meaning: "Stop — what needs to change, and who owns it?", ring: "focus:ring-red-300", ph: "e.g. Lead flow dried up — need to change the list we're calling. Jon to decide." },
 ];
-const PROMPT: Record<Light, string> = {
-  green: "",
-  yellow: "What's not working, and what help do you need?",
-  red: "What needs to change, and who needs to own it?",
-};
 
-export default function StoplightForm({ initial, note, greenWhy, behind, err }: {
-  initial: Light | null; note: string; greenWhy: string; behind: string[]; err?: string;
+export default function StoplightForm({ greenNote, yellowNote, redNote, behind, err }: {
+  greenNote: string; yellowNote: string; redNote: string; behind: string[]; err?: string;
 }) {
-  const [color, setColor] = useState<Light | null>(initial);
-  const needWhy = color === "green" && behind.length > 0;
+  const [g, setG] = useState(greenNote);
+  const [y, setY] = useState(yellowNote);
+  const [r, setR] = useState(redNote);
+  const vals: Record<Light, [string, (v: string) => void]> = { green: [g, setG], yellow: [y, setY], red: [r, setR] };
+  const any = !!(g.trim() || y.trim() || r.trim());
+  const overall: Light | null = r.trim() ? "red" : y.trim() ? "yellow" : g.trim() ? "green" : null;
+  const needGreen = behind.length > 0 && !y.trim() && !r.trim();
+  const hadPrev = !!(greenNote || yellowNote || redNote);
   return (
     <form action={submitStoplight} className="space-y-4">
-      <div className="grid gap-2 sm:grid-cols-3">
-        {OPTS.map((o) => (
-          <label key={o.c} className={`cursor-pointer rounded-xl p-3 ring-1 transition ${color === o.c ? `ring-2 ${o.ring} ${o.bg}` : "ring-slate-200 hover:bg-slate-50"}`}>
-            <input type="radio" name="color" value={o.c} checked={color === o.c} onChange={() => setColor(o.c)} className="sr-only" />
-            <div className="text-lg font-bold">{o.emoji} {o.label}</div>
-            <div className="text-xs text-slate-500">{o.meaning}</div>
-          </label>
-        ))}
+      <p className="text-xs text-slate-500">Write a note under any colour that applies — like a real stoplight. Your overall light = the most serious one you flag.</p>
+      <div className="space-y-3">
+        {OPTS.map((o) => {
+          const [val, set] = vals[o.c];
+          return (
+            <div key={o.c} className="rounded-xl p-3 ring-1 ring-slate-200">
+              <label className="mb-1 flex flex-wrap items-center gap-2 text-sm font-bold">{o.emoji} {o.label}<span className="text-xs font-normal text-slate-400">{o.meaning}</span>{o.c === "green" && needGreen && <span className="text-red-500">*</span>}</label>
+              <textarea name={`${o.c}Note`} value={val} onChange={(e) => set(e.target.value)} rows={2} maxLength={500}
+                className={`w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 ${o.ring}`}
+                placeholder={o.ph} />
+            </div>
+          );
+        })}
       </div>
 
-      {color && color !== "green" && (
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-500">{PROMPT[color]} <span className="text-red-500">*</span></label>
-          <textarea name="note" required defaultValue={note} rows={3} maxLength={500}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
-            placeholder={color === "red" ? "e.g. Lead flow dried up — need to change the list we're calling. Jon to decide on new list." : "e.g. Buyers aren't responding to the new blast — need help rewriting it."} />
-          <p className="mt-1 text-[11px] text-slate-400">This becomes an item on the Issues list so we solve it in the meeting.</p>
-        </div>
-      )}
+      {needGreen && <p className="text-[11px] text-amber-600">Your KPIs show behind pace ({behind.join(", ")}). Add a Green note on what makes this week green.</p>}
+      <p className="text-[11px] text-slate-400">Anything in Yellow or Red becomes an item on the Issues list so we solve it in the meeting.</p>
+      {overall && <p className="text-xs font-semibold text-slate-600">Overall this week: {overall === "green" ? "🟢 Green" : overall === "yellow" ? "🟡 Yellow" : "🔴 Red"}</p>}
+      {err && <p className="text-sm font-semibold text-red-600">{err === "note" ? "Write a note under at least one colour." : err === "why" ? "Add a Green note on what makes it green." : "Add a note."}</p>}
 
-      {needWhy && (
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-500">Your KPIs show behind pace ({behind.join(", ")}). What makes this week green? <span className="text-red-500">*</span></label>
-          <input name="greenWhy" required defaultValue={greenWhy} maxLength={500}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
-            placeholder="e.g. Spent the week building the new buyer list — numbers land next week." />
-        </div>
-      )}
-
-      {err && <p className="text-sm font-semibold text-red-600">{err === "note" ? "Add a note for yellow/red." : err === "why" ? "Add a line on what makes it green." : "Pick a color."}</p>}
-
-      <button disabled={!color} className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700 disabled:opacity-40">
-        {initial ? "Update my stoplight" : "Submit my stoplight"}
+      <button disabled={!any} className="rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white hover:bg-brand-navy-700 disabled:opacity-40">
+        {hadPrev ? "Update my stoplight" : "Submit my stoplight"}
       </button>
     </form>
   );
