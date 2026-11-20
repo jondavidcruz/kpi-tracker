@@ -198,28 +198,37 @@ async function upsertEntry(kpiKey: string, userId: string, date: string, value: 
  *  Manual entries still win (upsertEntry rule). */
 export async function feedCrmBrowserCalls(date: string, tz: string): Promise<Record<string, number>> {
   const { start, end } = dayBounds(date, tz);
-  const ghlFirsts = new Set(AGENTS.map((a) => a.first));
-  const TALK_BY_ROLE: Record<string, string> = { acquisitions: "acq_talk_time", dispositions: "ds_talk_time", cc_lm: "cc_talk_time" };
+  // 🔁 REI Reply / GoHighLevel RETIRED (Jon 2026-11-19: "we don't have REI Reply anymore — Marie
+  // calls on Direct REI and War Room"). So EVERY rep's call KPIs now feed from WAR ROOM CrmEvents,
+  // not GHL. (Previously this skipped the GHL-list reps — Marie/Michelle/Sharyn — so their War Room
+  // calls never counted once GHL died. Now they do.) Per-rep KPI keys come from the AGENTS map when
+  // present, else the role default. NOTE: Direct REI calls aren't logged as War Room events, so they
+  // aren't per-rep attributable here — the Telnyx team verification covers total channel volume.
+  const cfgByFirst = new Map(AGENTS.map((a) => [a.first, a]));
+  const ROLE_KEYS: Record<string, { dials?: string; answered?: string; talk: string }> = {
+    acquisitions: { dials: "outbound_calls", answered: "connected_calls", talk: "acq_talk_time" },
+    dispositions: { dials: "buyers_contacted", answered: "answered_calls", talk: "ds_talk_time" },
+    cc_lm: { talk: "cc_talk_time" },
+  };
   const users = await db.user.findMany({ where: { active: true }, select: { id: true, name: true, position: true } });
   const out: Record<string, number> = {};
   for (const u of users) {
     const first = u.name.trim().split(/\s+/)[0].toLowerCase();
-    if (ghlFirsts.has(first)) continue; // GHL already covers them
-    const talkKey = TALK_BY_ROLE[u.position ?? ""];
-    if (!talkKey) continue;
+    const role = ROLE_KEYS[u.position ?? ""];
+    const agent = cfgByFirst.get(first);
+    const talkKey = agent?.talk ?? role?.talk;
+    const dialsKey = agent?.dials ?? role?.dials;
+    const answeredKey = agent?.answered ?? role?.answered;
+    if (!talkKey && !dialsKey) continue; // rep has no call-KPI mapping (e.g. no position)
     const events = await db.crmEvent.findMany({ where: { actor: u.name, kind: "call", at: { gte: new Date(start), lt: new Date(end) } }, select: { meta: true } });
     if (!events.length) continue;
-    const secs = events.reduce((a, e) => a + (Number((e.meta as { secs?: number } | null)?.secs) || 0), 0);
-    if (secs > 0) { await upsertEntry(talkKey, u.id, date, secs); out[first] = secs; }
-    // War Room softphone also counts DIALS + CONNECTIONS for non-GHL reps
-    // (Nick dials here, not Direct REI — this is his only auto-tracking).
-    if (u.position === "acquisitions") {
-      const dials = events.length;
-      const connected = events.filter((e) => (Number((e.meta as { secs?: number } | null)?.secs) || 0) >= 60).length;
-      if (dials > 0) await upsertEntry("outbound_calls", u.id, date, dials);
-      if (connected > 0) await upsertEntry("connected_calls", u.id, date, connected);
-      out[`${first}|dials`] = dials;
-    }
+    let secs = 0, connected = 0;
+    for (const e of events) { const s = Number((e.meta as { secs?: number } | null)?.secs) || 0; secs += s; if (s >= 60) connected++; }
+    const dials = events.length;
+    if (talkKey && secs > 0) await upsertEntry(talkKey, u.id, date, secs);
+    if (dialsKey && dials > 0) await upsertEntry(dialsKey, u.id, date, dials);
+    if (answeredKey && connected > 0) await upsertEntry(answeredKey, u.id, date, connected);
+    out[first] = dials;
   }
   return out;
 }
@@ -233,10 +242,13 @@ export async function writeDay(date: string, tz: string): Promise<{ result: Pull
     const uid = userByFirst.get(a.first);
     const agg = result.per[a.crm];
     if (!uid || !agg) continue;
-    await upsertEntry(a.talk, uid, date, agg.talkSec);
-    if (a.dials) await upsertEntry(a.dials, uid, date, agg.dials);
-    if (a.answered) await upsertEntry(a.answered, uid, date, agg.answered);
-    if (a.conv) await upsertEntry(a.conv, uid, date, agg.connected);
+    // REI Reply / GoHighLevel is RETIRED (Jon 2026-11-19) so this feed returns 0s — only
+    // write POSITIVE values so a dead-GHL run can never clobber the real War Room numbers
+    // (feedCrmBrowserCalls below is now the live source). Manual entries still win in upsertEntry.
+    if (agg.talkSec > 0) await upsertEntry(a.talk, uid, date, agg.talkSec);
+    if (a.dials && agg.dials > 0) await upsertEntry(a.dials, uid, date, agg.dials);
+    if (a.answered && agg.answered > 0) await upsertEntry(a.answered, uid, date, agg.answered);
+    if (a.conv && agg.connected > 0) await upsertEntry(a.conv, uid, date, agg.connected);
     wrote[a.first] = agg;
   }
   return { result, wrote };
