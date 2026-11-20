@@ -41,28 +41,73 @@ async function pull(key: string, recordType: string, dateField: string, start: s
   };
 }
 
+// Aggregate every page of a record type, summing cost + classifying call legs.
+async function aggregate(key: string, recordType: string, dateField: string, start: string, end: string, maxPages = 40) {
+  let page = 1, legs = 0, connected = 0, withCostGt0 = 0, sumCost = 0, sumRate = 0, billedSec = 0;
+  const top: Array<{ cost: string; billed_sec: unknown; call_sec?: unknown; direction: unknown; connection_name?: unknown; started_at?: unknown }> = [];
+  while (page <= maxPages) {
+    const qs =
+      `filter[record_type]=${encodeURIComponent(recordType)}` +
+      `&filter[${dateField}][gte]=${encodeURIComponent(start)}&filter[${dateField}][lt]=${encodeURIComponent(end)}` +
+      `&page[size]=250&page[number]=${page}`;
+    const r = await fetch(`https://api.telnyx.com/v2/detail_records?${qs}`, { headers: { Authorization: `Bearer ${key}` } });
+    if (r.status !== 200) break;
+    const body = (await r.json()) as { data?: Rec[]; meta?: { total_pages?: number } };
+    const data = body.data ?? [];
+    for (const d of data) {
+      legs++;
+      const cost = Math.abs(parseFloat(String(d.cost ?? "0"))) || 0;
+      sumCost += cost;
+      sumRate += Math.abs(parseFloat(String(d.rate ?? "0"))) || 0;
+      billedSec += Number(d.billed_sec ?? 0) || 0;
+      if (d.completed === 1 || d.connected === 1 || Number(d.billed_sec ?? 0) > 0) connected++;
+      if (cost > 0) {
+        withCostGt0++;
+        if (top.length < 5) top.push({ cost: String(d.cost), billed_sec: d.billed_sec, call_sec: d.call_sec, direction: d.direction, connection_name: d.connection_name, started_at: d.started_at });
+      }
+    }
+    const totalPages = body.meta?.total_pages ?? 1;
+    if (page >= totalPages || data.length === 0) break;
+    page++;
+  }
+  return { recordType, legs, connected, withCostGt0, sumCost: Number(sumCost.toFixed(4)), sumRate: Number(sumRate.toFixed(4)), billedSec, pagesScanned: page, sampleCostlyLegs: top };
+}
+
 export async function GET(req: NextRequest) {
   const me = await getCurrentUser();
   if (!isAdmin(me)) return NextResponse.json({ error: "admin only — sign in as Jon" }, { status: 403 });
   const key = process.env.TELNYX_API_KEY;
   if (!key) return NextResponse.json({ error: "TELNYX_API_KEY not set" }, { status: 500 });
 
-  const days = Math.min(Number(new URL(req.url).searchParams.get("days") ?? 7) || 7, 60);
+  const sp = new URL(req.url).searchParams;
+  const days = Math.min(Number(sp.get("days") ?? 7) || 7, 60);
   const end = new Date().toISOString();
   const start = new Date(Date.now() - days * 86400000).toISOString();
 
-  const [callUnderscore, callHyphen, messaging] = await Promise.all([
-    pull(key, "call_control", "started_at", start, end), // the CORRECT Telnyx spelling
-    pull(key, "call-control", "started_at", start, end), // what the Apps Script currently uses
-    pull(key, "messaging", "created_at", start, end),    // texts (known-good, for contrast)
+  if (sp.get("sample") === "1") {
+    const [callUnderscore, callHyphen, messaging] = await Promise.all([
+      pull(key, "call_control", "started_at", start, end),
+      pull(key, "call-control", "started_at", start, end),
+      pull(key, "messaging", "created_at", start, end),
+    ]);
+    return NextResponse.json({ ok: true, window: { start, end, days }, call_control_UNDERSCORE: callUnderscore, "call-control_HYPHEN": callHyphen, messaging });
+  }
+
+  const [calls, sms] = await Promise.all([
+    aggregate(key, "call-control", "started_at", start, end),
+    aggregate(key, "messaging", "created_at", start, end),
   ]);
 
   return NextResponse.json({
     ok: true,
     window: { start, end, days },
-    note: "Compare call_control (underscore) vs call-control (hyphen). Whichever returns real totalResults + a populated cost field is the right one for the Apps Script.",
-    call_control_UNDERSCORE: callUnderscore,
-    "call-control_HYPHEN": callHyphen,
-    messaging,
+    calls: {
+      ...calls,
+      verdict: calls.withCostGt0 === 0
+        ? "⚠️ ZERO call legs have cost>0 — call spend is NOT in these CDRs (or not rated yet). Call $ can't be read from call-control.cost."
+        : `✅ ${calls.withCostGt0}/${calls.legs} call legs carry real cost; total $${calls.sumCost.toFixed(2)} over ${days}d. The field works — most legs are unconnected attempts ($0).`,
+    },
+    sms: { ...sms, verdict: `SMS: $${sms.sumCost.toFixed(2)} over ${days}d across ${sms.legs} messages (cost field is populated).` },
+    note: "Add ?sample=1 for raw first-record field dumps. callCount in the report = call LEGS (incl. unconnected attempts + both directions), not connected conversations.",
   });
 }
