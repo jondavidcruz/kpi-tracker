@@ -127,31 +127,59 @@ export function analyzeTelnyxSpend(snaps: BalanceSnap[]): SpendReport {
   };
 }
 
-// 🔎 Team comms VERIFICATION counts (Jon 2026-11-19: "Telnyx will be our verification" — REI Reply
-// retired; Direct REI + War Room both run on Telnyx). Cheap: reads meta.total_results (one request
-// each, NO record pagination). DirectREI mass-marketing is split out via its messaging profile so
-// the rest (War Room CRM traffic) can be eyeballed against our own CrmEvent logs. Counts are
-// carrier-level: inbound + outbound, per billed segment.
-const DIRECTREI_MSG_PROFILE = "40019f8e-dc9a-4b98-8086-de9333fe6f68"; // profile_name "DirectREI"
-export type CommsCounts = { messagesTotal: number; messagesDirectREI: number; messagesOther: number; splitOk: boolean; callLegs: number };
-export async function telnyxCommsCounts(startISO: string, endISO: string): Promise<CommsCounts | null> {
-  if (!process.env.TELNYX_API_KEY) return null;
-  const count = async (recordType: string, dateField: string, extra = ""): Promise<number | null> => {
-    const qs = `filter[record_type]=${encodeURIComponent(recordType)}&filter[${dateField}][gte]=${encodeURIComponent(startISO)}&filter[${dateField}][lt]=${encodeURIComponent(endISO)}${extra}&page[size]=1&page[number]=1`;
-    try {
-      const r = await fetch(`https://api.telnyx.com/v2/detail_records?${qs}`, { headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}` }, cache: "no-store", signal: AbortSignal.timeout(10000) });
-      if (!r.ok) return null;
-      const j = (await r.json()) as { meta?: { total_results?: number } };
-      return j.meta?.total_results ?? 0;
-    } catch { return null; }
+// 🔎 Team comms VERIFICATION breakdown (Jon 2026-11-19: "Telnyx will be our verification — show
+// usage from Direct REI and War Room"). Telnyx's detail_records has no messaging-profile FILTER,
+// so we page the window's records (capped) and group by the `profile_name` each record carries —
+// giving per-channel count + SPEND + in/out, which is what "usage from Direct REI vs War Room"
+// means. Carrier-level: inbound + outbound, per billed segment. Grand total comes from
+// meta.total_results (exact even when the per-channel scan is capped on a huge campaign day).
+type TxRec = { profile_name?: string; profile_id?: string; cost?: string; direction?: string; billed_sec?: number };
+export type CommsChannel = { name: string; count: number; cost: number; inbound: number; outbound: number };
+export type CommsBreakdown = {
+  messages: { total: number; scanned: number; partial: boolean; cost: number; byChannel: CommsChannel[] };
+  calls: { total: number; scanned: number; partial: boolean; cost: number; connected: number };
+};
+export async function telnyxCommsBreakdown(startISO: string, endISO: string): Promise<CommsBreakdown | null> {
+  const key = process.env.TELNYX_API_KEY;
+  if (!key) return null;
+  const page = async (recordType: string, dateField: string, maxPages: number): Promise<{ rows: TxRec[]; total: number; partial: boolean }> => {
+    let p = 1, total = 0, partial = false;
+    const rows: TxRec[] = [];
+    while (p <= maxPages) {
+      const qs = `filter[record_type]=${encodeURIComponent(recordType)}&filter[${dateField}][gte]=${encodeURIComponent(startISO)}&filter[${dateField}][lt]=${encodeURIComponent(endISO)}&page[size]=50&page[number]=${p}`;
+      let body: { data?: TxRec[]; meta?: { total_results?: number; total_pages?: number } } = {};
+      try {
+        const r = await fetch(`https://api.telnyx.com/v2/detail_records?${qs}`, { headers: { Authorization: `Bearer ${key}` }, cache: "no-store", signal: AbortSignal.timeout(10000) });
+        if (!r.ok) break;
+        body = await r.json();
+      } catch { break; }
+      const data = body.data ?? [];
+      total = body.meta?.total_results ?? total;
+      rows.push(...data);
+      const totalPages = body.meta?.total_pages ?? 1;
+      if (p >= totalPages || data.length === 0) break;
+      if (p >= maxPages) { partial = true; break; }
+      p++;
+    }
+    return { rows, total, partial };
   };
-  const [messagesTotal, direct, callLegs] = await Promise.all([
-    count("messaging", "created_at"),
-    count("messaging", "created_at", `&filter[messaging_profile_id]=${DIRECTREI_MSG_PROFILE}`),
-    count("call-control", "started_at"),
-  ]);
-  const total = messagesTotal ?? 0;
-  const splitOk = direct != null && direct <= total; // the profile filter is supported & sane
-  const messagesDirectREI = splitOk ? (direct as number) : 0;
-  return { messagesTotal: total, messagesDirectREI, messagesOther: splitOk ? Math.max(0, total - messagesDirectREI) : total, splitOk, callLegs: callLegs ?? 0 };
+  const num = (s: unknown) => Math.abs(parseFloat(String(s ?? "0"))) || 0;
+  const [msg, call] = await Promise.all([page("messaging", "created_at", 30), page("call-control", "started_at", 10)]);
+  const byName = new Map<string, CommsChannel>();
+  let msgCost = 0;
+  for (const m of msg.rows) {
+    const name = (m.profile_name && m.profile_name.trim()) || (m.profile_id ? `Profile ${m.profile_id.slice(0, 8)}…` : "(unlabeled)");
+    const c = num(m.cost); msgCost += c;
+    const ch = byName.get(name) ?? { name, count: 0, cost: 0, inbound: 0, outbound: 0 };
+    ch.count++; ch.cost += c;
+    if (m.direction === "inbound") ch.inbound++; else ch.outbound++;
+    byName.set(name, ch);
+  }
+  let callCost = 0, connected = 0;
+  for (const c of call.rows) { callCost += num(c.cost); if (Number(c.billed_sec ?? 0) > 0) connected++; }
+  const byChannel = [...byName.values()].sort((a, b) => b.count - a.count).map((ch) => ({ ...ch, cost: Number(ch.cost.toFixed(4)) }));
+  return {
+    messages: { total: msg.total || msg.rows.length, scanned: msg.rows.length, partial: msg.partial, cost: Number(msgCost.toFixed(4)), byChannel },
+    calls: { total: call.total || call.rows.length, scanned: call.rows.length, partial: call.partial, cost: Number(callCost.toFixed(4)), connected },
+  };
 }

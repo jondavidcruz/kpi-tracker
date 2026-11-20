@@ -42,12 +42,12 @@ export function positionLabel(key: string): string {
 // have more people capable of acquisitions"). The primary (User.position) keeps
 // driving goals, alerts, and missing-entry nags; the secondary role's KPIs are
 // OPTIONAL — they appear on /entry as an extra section and show on the daily
-// review when logged, but never alert. Sharyn: primarily Dispositions,
-// cross-trained Acquisitions. (Michelle is Acquisitions ONLY — Jon 2026-09-28:
-// "not doing dispositions anymore"; no secondary.)
+// review when logged, but never alert. ONLY Marie is a hybrid right now: she
+// "floats between both offices" (Jon 2026-11-19), primary Dispositions + secondary
+// Acquisitions. (Sharyn = Dispositions ONLY — Jon 2026-11-19, removed her acquisitions
+// secondary. Michelle = Acquisitions ONLY — Jon 2026-09-28; no secondary.)
 export const SECONDARY_POSITION: Record<string, string> = {
-  sharyn: "acquisitions",
-  marie: "acquisitions", // Jon 2026-11-19: "add Marie to acquisitions as well for KPIs" (primary stays Dispositions)
+  marie: "acquisitions", // primary stays Dispositions; floats both offices
 };
 
 /** The rep's cross-trained secondary scorecard, or null. Never equals their primary. */
