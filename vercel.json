@@ -73,16 +73,12 @@
       "schedule": "0 3 * * *"
     },
     {
-      "path": "/api/cron?breaknudge=am",
-      "schedule": "30 18 * * 1-5"
-    },
-    {
       "path": "/api/cron?breaknudge=lunch",
-      "schedule": "0 20 * * 1-5"
+      "schedule": "0 17 * * 1-5"
     },
     {
       "path": "/api/cron?breaknudge=pm",
-      "schedule": "0 23 * * 1-5"
+      "schedule": "0 20 * * 1-5"
     },
     {
       "path": "/api/cron?crm=1",
@@ -235,10 +231,6 @@
     {
       "path": "/api/cron?newleadnudge=1",
       "schedule": "0 22 * * 1-5"
-    },
-    {
-      "path": "/api/cron?devdrop=1&commit=1",
-      "schedule": "0 17 * * 6"
     },
     {
       "path": "/api/cron?dreiclean=1&commit=1",

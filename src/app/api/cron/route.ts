@@ -4665,16 +4665,16 @@ export async function GET(request: Request) {
   // Each is its own once-a-day cron in vercel.json. Posts to the Timecard Chat space.
   if (url.searchParams.get("breaknudge")) {
     const slot = url.searchParams.get("breaknudge");
-    // 🕐 Real current Pacific time, DST-aware (Jon 2026-11-04: it hardcoded "10:30" and
-    // kept saying that after DST ended, when the cron actually fires at 9:30 PST). Intl
-    // with America/Los_Angeles handles PST/PDT automatically — the message never lies.
-    const ptTime = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit" }).format(new Date());
+    // 🕐 Real current EASTERN time, DST-aware (Jon 2026-11-19: the team works EST — lunch at
+    // 12 ET, afternoon break at 3 ET; mid-morning break removed). Intl with America/New_York
+    // handles EST/EDT automatically — the message shows the girls' actual local time.
+    const etTime = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" }).format(new Date());
     const msg =
       slot === "lunch"
-        ? `🍔 *Lunch — ${ptTime}.* Whole team's on lunch now. Step away, eat, recharge — then log it on your time card.`
+        ? `🍔 *Lunch — ${etTime}.* Whole team's on lunch now. Step away, eat, recharge — then log it on your time card.`
         : slot === "pm"
-          ? `☕ *Afternoon break — ${ptTime}.* Everyone grab a quick 15 minutes to reset before the final push. (Log it on your time card.)`
-          : `☕ *Break time — ${ptTime}.* Michelle, Sharyn & Jon — take a quick 10–15 min to reset. You've earned it.`;
+          ? `☕ *Afternoon break — ${etTime}.* Everyone grab a quick 15 minutes to reset before the final push. (Log it on your time card.)`
+          : `☕ *Break time — ${etTime}.* Michelle, Sharyn & Jon — take a quick 10–15 min to reset. You've earned it.`;
     const chat = await sendTimecardChat(msg);
     return NextResponse.json({ ok: true, breaknudge: slot, chat });
   }
